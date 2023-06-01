@@ -1,0 +1,73 @@
+# Learn detailed information about the fields of an extension.yaml file in the docs:
+# https://firebase.google.com/docs/extensions/reference/extension-yaml
+
+name: elemento-app-server  # Identifier for your extension
+version: 0.0.1  # Follow semver versioning
+specVersion: v1beta  # Version of the Firebase Extensions specification
+
+# Friendly display name for your extension (~3-5 words)
+displayName: Elemento App Server
+
+# Brief description of the task your extension performs (~1 sentence)
+description: >-
+  Runs Elemento server apps.
+
+license: Apache-2.0  # https://spdx.org/licenses/
+
+# Public URL for the source code of your extension
+sourceUrl: https://github.com/xxx/xxx/tree/master/templates/extensions
+
+# Specify whether a paid-tier billing plan is required to use your extension.
+# Learn more in the docs: https://firebase.google.com/docs/extensions/reference/extension-yaml#billing-required-field
+billingRequired: false
+
+# In an `apis` field, list any Google APIs (like Cloud Translation, BigQuery, etc.)
+# required for your extension to operate.
+# Learn more in the docs:
+# https://firebase.google.com/docs/extensions/reference/extension-yaml#apis-field
+
+# In a `roles` field, list any IAM access roles required for your extension to operate.
+# Learn more in the docs:
+# https://firebase.google.com/docs/extensions/reference/extension-yaml#roles-field
+
+# In the `resources` field, list each of your extension's functions, including the trigger for each function.
+# Learn more in the docs:
+# https://firebase.google.com/docs/extensions/reference/extension-yaml#resources-field
+resources:
+  - name: appServer
+    type: firebaseextensions.v1beta.function
+    description: >-
+      HTTP request-triggered function that loads an Elemento app to handle the request
+    properties:
+      httpsTrigger: {}
+      runtime: "nodejs18"
+#  - name: makeuppercase
+#    type: firebaseextensions.v1beta.function
+#    properties:
+#      eventTrigger:
+#        eventType: providers/google.firebase.database/eventTypes/ref.create
+#        # DATABASE_INSTANCE (project's default instance) is an auto-populated
+#        # parameter value. You can also specify an instance.
+#        resource: projects/_/instances/${DATABASE_INSTANCE}/refs/messages/{pushId}/original
+#      runtime: "nodejs18"
+
+
+# In the `params` field, set up your extension's user-configured parameters.
+# Learn more in the docs:
+# https://firebase.google.com/docs/extensions/reference/extension-yaml#params-field
+params:
+  - param: GITHUB_USER
+    label: GitHub username
+    description: >-
+      the GitHub username for the repository where the Elemento app is located
+    type: string
+    required: true
+    immutable: false
+
+  - param: GITHUB_REPO
+    label: GitHub repo
+    description: >-
+      the name of the repository where the Elemento app is located
+    type: string
+    required: true
+    immutable: false
