@@ -77,3 +77,11 @@ params:
     type: string
     required: true
     immutable: false
+
+  - param: GITHUB_ACCESS_TOKEN
+    label: GitHub access token
+    description: >-
+      Optional access token with read permissions on the repository where the Elemento app is located
+    type: string  # should be secret but does not work yet
+    required: false
+    immutable: false

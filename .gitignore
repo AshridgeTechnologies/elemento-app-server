@@ -1,3 +1,5 @@
 # Node.js dependency directory
 node_modules/
 /functions/integration-tests/extensions/appServer.env
+/private
+**/private

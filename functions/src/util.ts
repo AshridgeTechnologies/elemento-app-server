@@ -30,21 +30,23 @@ export interface ModuleCache {
     store(path: string, text: string): Promise<void>
 }
 
-async function downloadFile(url: string) {
+async function downloadFile(url: string, accessToken: string | undefined) {
     console.log('Downloading', url)
-    const resp = await axios.get(url, {})
+    const options = accessToken ? {headers: { Authorization: `Bearer ${accessToken}`}} : {}
+    const resp = await axios.get(url, options)
     if (resp.status !== 200) {
         throw new Error(resp.status + ' ' + resp.statusText)
     }
     return await resp.data
 }
 
-export async function downloadModule(url: string, localPath: string, cache: ModuleCache) {
+export async function downloadModule(url: string, localPath: string, cache: ModuleCache, accessToken?: string) {
     const alreadyDownloaded = await fileExists(localPath)
     if (!alreadyDownloaded) {
+        console.log('Fetching from cache', url)
         const foundInCache = await cache.downloadToFile(url, localPath)
         if (!foundInCache) {
-            const moduleContents = await downloadFile(url)
+            const moduleContents = await downloadFile(url, accessToken)
             await cache.store(url, moduleContents)
             await fs.promises.writeFile(localPath, moduleContents)
         }
