@@ -18,7 +18,7 @@ export function parseQueryParams(req: {query: { [key: string]: string; }}): obje
     }
     return result
 }
-export function errorHandler(err: any, req: any, res: any, next: any) {
+export function errorHandler(err: any, req: any, res: any, _next: any) {
     const {status = 500, message} = err
     res.status(status).send({error: {status, message}})
 }
@@ -40,7 +40,7 @@ export const requestHandler = (appFactory: AppFactory) => async (req: any, res: 
         const currentUser = await getCurrentUser(req)
         console.log('user id', currentUser?.uid)
         console.log('req.baseUrl', req.baseUrl)
-        const version = req.baseUrl.match(/\/@(\w+)\//)?.[1] ?? LATEST
+        const version = req.baseUrl.match(/\/@([-\w]+)\//)?.[1] ?? LATEST
         const match = req.path.match(/\/(\w+)\/(\w+)$/)
         if (!match) {
             next(responseError(404, 'Not Found'))

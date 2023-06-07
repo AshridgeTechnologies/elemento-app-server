@@ -8,7 +8,7 @@ import {type ModuleCache} from '../src/util'
 
 const createModuleCache = (): ModuleCache & {modules:any} => ({
     modules: {},
-    downloadToFile(path: string, filePath: string): Promise<boolean> {
+    downloadToFile(path: string, _: string): Promise<boolean> {
         return Promise.resolve(!!this.modules[path])
     },
     store(path: string, text: string): Promise<void> {
@@ -26,7 +26,7 @@ async function newModuleImportDir() {
 
 test('app Server', async (t) => {
 
-    await t.test('app server runs server app from mock GitHub and caches module', async () => {
+    await t.test('app server runs server app on latest version from mock GitHub and caches module', async () => {
         const moduleImportPath = await newModuleImportDir()
 
         const gitHubRequests: string[] = []
@@ -66,6 +66,46 @@ test('app Server', async (t) => {
         }
     })
 
+    await t.test('app server runs server app on specified version from mock GitHub and caches module', async () => {
+        const moduleImportPath = await newModuleImportDir()
+
+        const gitHubRequests: string[] = []
+        const requestListener = function (req: IncomingMessage, res: ServerResponse) {
+            gitHubRequests.push(req.url!)
+            console.log('Request', req.url)
+            res.setHeader("Content-Type", "text/javascript")
+            res.writeHead(200)
+            res.end(serverAppCode)
+        }
+
+        const gitHubPort = 7654
+        const gitHubMockServer = http.createServer(requestListener)
+        await new Promise( resolve => gitHubMockServer.listen(gitHubPort, resolve as () => void))
+
+        let server: Server | undefined
+        try {
+            const runtimeImportPath = 'http://localhost:1234/serverRuntime'
+            const gitHubServer = `http://localhost:${gitHubPort}`
+            const gitHubUserConfig = { value: () => 'testuser' }
+            const gitHubRepoConfig = { value: () => 'testrepo' }
+            const moduleCache = createModuleCache()
+
+            const theAppServer = await createAppServer({runtimeImportPath, moduleImportPath, gitHubUserConfig, gitHubRepoConfig, moduleCache, gitHubServer})
+            server = theAppServer.listen(7659)
+
+            const jsonResponse1 = await fetch(`http://localhost:7659/@aabb1122/capi/ServerApp1/Plus?a=37&b=5`).then(resp => resp.json())
+            expect(jsonResponse1).toBe(42)
+            const jsonResponse2 = await fetch(`http://localhost:7659/@aabb1122/capi/ServerApp1/Plus?a=99&b=1`).then(resp => resp.json())
+            expect(jsonResponse2).toBe(100)
+            expect(gitHubRequests).toStrictEqual(['/testuser/testrepo/aabb1122/dist/server/ServerApp1.mjs'])
+            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/aabb1122/dist/server/ServerApp1.mjs`]).toBe(serverAppCode)
+            expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).not.toBe(undefined)
+        } finally {
+            gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
+            server && await new Promise(resolve => server!.close(resolve as () => void))
+        }
+    })
+
     await t.test('app server runs server app from GitHub', async () => {
         const moduleImportPath = await newModuleImportDir()
         let server: Server | undefined = undefined
@@ -80,6 +120,25 @@ test('app Server', async (t) => {
 
             const jsonResponse = await fetch(`http://localhost:7656/capi/ServerApp1/AddTen?abc=5`).then(resp => resp.json())
             expect(jsonResponse).toBe(15)
+        } finally {
+            server && await new Promise(resolve => server!.close(resolve as () => void))
+        }
+    })
+
+    await t.test('app server runs server app on specified version from GitHub', async () => {
+        const moduleImportPath = await newModuleImportDir()
+        let server: Server | undefined = undefined
+        try {
+            const runtimeImportPath = 'http://localhost:1234/serverRuntime'
+            const gitHubUserConfig = { value: () => 'rileydog16' }
+            const gitHubRepoConfig = { value: () => 'rabbits-4' }
+            const moduleCache = createModuleCache()
+
+            const theAppServer = await createAppServer({runtimeImportPath, moduleImportPath, gitHubUserConfig, gitHubRepoConfig, moduleCache})
+            server = theAppServer.listen(7660)
+
+            const jsonResponse = await fetch(`http://localhost:7660/@test-version/capi/ServerApp1/AddTwenty?abc=5`).then(resp => resp.json())
+            expect(jsonResponse).toBe(25)
         } finally {
             server && await new Promise(resolve => server!.close(resolve as () => void))
         }
