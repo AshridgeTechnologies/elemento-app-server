@@ -2,6 +2,7 @@ import fs from 'fs'
 import axios from 'axios'
 import {parseISO} from 'date-fns'
 import {getStorage} from 'firebase-admin/storage'
+import path from 'path'
 
 const fileExists = (filePath: string): Promise<boolean> => fs.promises.access(filePath).then(() => true, () => false)
 
@@ -51,6 +52,25 @@ export async function downloadModule(url: string, localPath: string, cache: Modu
             await fs.promises.writeFile(localPath, moduleContents)
         }
     }
+}
+
+export async function getFromCache(cachePath: string, localPath: string, cache: ModuleCache) {
+    const alreadyDownloaded = await fileExists(localPath)
+    if (!alreadyDownloaded) {
+        console.log('Fetching from cache', cachePath)
+        const foundInCache = await cache.downloadToFile(cachePath, localPath)
+        if (!foundInCache) {
+            throw new Error('File not found in cache: ' + cachePath)
+        }
+    }
+}
+
+export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: string) {
+    await Promise.all([
+        fs.promises.mkdir(path.dirname(localPath), {recursive: true})
+            .then( () => fs.promises.writeFile(localPath, contents) ),
+        cache.store(cachePath, contents)
+    ])
 }
 
 export class CloudStorageCache implements ModuleCache {

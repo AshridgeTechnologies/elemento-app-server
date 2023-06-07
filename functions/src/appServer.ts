@@ -1,7 +1,7 @@
 import {type AppFactory, expressApp, LATEST} from './expressUtils.js'
 import fs from 'fs'
 import path from 'path'
-import {downloadModule, ModuleCache} from './util.js'
+import {downloadModule, getFromCache, ModuleCache, putIntoCacheAndFile} from './util.js'
 
 interface ConfigParam<T> {
     value(): T
@@ -27,6 +27,20 @@ function createAppFactory({runtimeImportPath, moduleImportPath, gitHubUserConfig
     console.log('Storing files in', elementoFilesPath)
 
     return async (appName, user, version = LATEST) => {
+        if (version === 'preview') {
+            const appFileName = `${appName}.mjs`
+            const appModulePath = path.join(elementoFilesPath, version, appFileName)
+            const serverRuntimeModulePath = path.join(elementoFilesPath, version, 'serverRuntime.cjs')
+            const cachePath = `${version}/dist/server/${appFileName}`
+            await Promise.all([
+                downloadModule(`${runtimeImportPath}/serverRuntime.cjs`, serverRuntimeModulePath, moduleCache),
+                getFromCache(cachePath, appModulePath, moduleCache)
+            ])
+            const serverAppModule = await import('file://' + appModulePath)
+            const serverApp = serverAppModule.default
+            return serverApp(user)
+        }
+
         const gitHubVersion = version === LATEST ? 'main' : version
         const appFileName = `${appName}.mjs`
         const appModulePath = path.join(elementoFilesPath, appFileName)
@@ -44,7 +58,24 @@ function createAppFactory({runtimeImportPath, moduleImportPath, gitHubUserConfig
     }
 }
 
+const createPutHandler = ({moduleImportPath, moduleCache}: {moduleImportPath: string, moduleCache: ModuleCache}) =>
+    async (req: any, res: any, next: (err?: any) => void) => {
+        console.log('put handler', req.url)
+        try {
+            const elementoFilesPath = path.join(moduleImportPath, 'appFiles')
+            const appModulePath = path.join(elementoFilesPath, req.url)
+            const cachePath = req.url
+            const moduleContents = req.body as string
+            await putIntoCacheAndFile(cachePath, appModulePath, moduleCache, moduleContents)
+            res.end()
+        } catch (err) {
+            next(err)
+        }
+    }
+
 export default function createAppServer(props: AppServerProperties) {
+    const {moduleImportPath, moduleCache} = props
     const appFactory = createAppFactory(props)
-    return expressApp(appFactory)
+    const putHandler = createPutHandler({moduleImportPath, moduleCache})
+    return expressApp(appFactory, putHandler)
 }

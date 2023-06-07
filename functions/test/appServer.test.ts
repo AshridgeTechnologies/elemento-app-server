@@ -17,11 +17,17 @@ const createModuleCache = (): ModuleCache & {modules:any} => ({
     }
 })
 
+let dirSeq = 0
+async function newModuleImportDir() {
+    const moduleImportPath = `${os.tmpdir()}/appServer.test.${++dirSeq}`
+    await fs.promises.rm(moduleImportPath, {force: true, recursive: true})
+    return moduleImportPath
+}
+
 test('app Server', async (t) => {
 
     await t.test('app server runs server app from mock GitHub and caches module', async () => {
-        const moduleImportPath = os.tmpdir() + '/' + 'appServer.test.1'
-        await fs.promises.rm(moduleImportPath, {force: true, recursive: true})
+        const moduleImportPath = await newModuleImportDir()
 
         const gitHubRequests: string[] = []
         const requestListener = function (req: IncomingMessage, res: ServerResponse) {
@@ -61,8 +67,7 @@ test('app Server', async (t) => {
     })
 
     await t.test('app server runs server app from GitHub', async () => {
-        const moduleImportPath = os.tmpdir() + '/' + 'appServer.test.2'
-        await fs.promises.rm(moduleImportPath, {force: true, recursive: true})
+        const moduleImportPath = await newModuleImportDir()
         let server: Server | undefined = undefined
         try {
             const runtimeImportPath = 'http://localhost:1234/serverRuntime'
@@ -81,8 +86,7 @@ test('app Server', async (t) => {
     })
 
     await t.test('app server runs server app from private repo in GitHub', async () => {
-        const moduleImportPath = os.tmpdir() + '/' + 'appServer.test.3'
-        await fs.promises.rm(moduleImportPath, {force: true, recursive: true})
+        const moduleImportPath = await newModuleImportDir()
         const gitHubAccessToken = await fs.promises.readFile('private/githubRabbits5RepoToken_finegrained.txt', 'utf8') as string
         let server: Server | undefined = undefined
         try {
@@ -98,6 +102,38 @@ test('app Server', async (t) => {
 
             const jsonResponse = await fetch(`http://localhost:7657/capi/ServerApp1/AddTen?abc=5`).then(resp => resp.json())
             expect(jsonResponse).toBe(15)
+        } finally {
+            server && await new Promise(resolve => server!.close(resolve as () => void))
+        }
+    })
+
+    await t.test('app server stores and uses preview code from editor', async () => {
+        const moduleImportPath = await newModuleImportDir()
+
+        let server: Server | undefined
+        try {
+            const runtimeImportPath = 'http://localhost:1234/serverRuntime'
+            const gitHubServer = `http://localhost:xxxx`
+            const gitHubUserConfig = { value: () => 'testuser' }
+            const gitHubRepoConfig = { value: () => 'testrepo' }
+            const moduleCache = createModuleCache()
+
+            const theAppServer = await createAppServer({runtimeImportPath, moduleImportPath, gitHubUserConfig, gitHubRepoConfig, moduleCache, gitHubServer})
+            server = theAppServer.listen(7658)
+
+            await fetch(`http://localhost:7658/preview/ServerApp1.mjs`, {
+                method: 'PUT',
+                headers: {
+                    "Content-Type": "text/plain",
+                },
+                body: serverAppCode})
+
+            const jsonResponse1 = await fetch(`http://localhost:7658/@preview/capi/ServerApp1/Plus?a=37&b=5`).then(resp => resp.json())
+            expect(jsonResponse1).toBe(42)
+            const jsonResponse2 = await fetch(`http://localhost:7658/@preview/capi/ServerApp1/Plus?a=99&b=1`).then(resp => resp.json())
+            expect(jsonResponse2).toBe(100)
+            expect(moduleCache.modules[`/preview/ServerApp1.mjs`]).toBe(serverAppCode)
+            expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).not.toBe(undefined)
         } finally {
             server && await new Promise(resolve => server!.close(resolve as () => void))
         }
