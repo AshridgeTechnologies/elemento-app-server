@@ -6,6 +6,10 @@ import path from 'path'
 
 const fileExists = (filePath: string): Promise<boolean> => fs.promises.access(filePath).then(() => true, () => false)
 
+const mkdirWriteFile = (localPath: string, contents: string) =>
+        fs.promises.mkdir(path.dirname(localPath), {recursive: true})
+        .then( () => fs.promises.writeFile(localPath, contents) )
+
 const isNumeric = (s: string) : boolean => s!== '' && s.match(/^\d*\.?\d*$/) !== null
 const isBooleanString = (s: string) : boolean => s.match(/true|false/) !== null
 
@@ -49,7 +53,7 @@ export async function downloadModule(url: string, localPath: string, cache: Modu
         if (!foundInCache) {
             const moduleContents = await downloadFile(url, accessToken)
             await cache.store(url, moduleContents)
-            await fs.promises.writeFile(localPath, moduleContents)
+            await mkdirWriteFile(localPath, moduleContents)
         }
     }
 }
@@ -67,8 +71,7 @@ export async function getFromCache(cachePath: string, localPath: string, cache: 
 
 export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: string) {
     await Promise.all([
-        fs.promises.mkdir(path.dirname(localPath), {recursive: true})
-            .then( () => fs.promises.writeFile(localPath, contents) ),
+        mkdirWriteFile(localPath, contents),
         cache.store(cachePath, contents)
     ])
 }

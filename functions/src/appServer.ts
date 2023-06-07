@@ -26,32 +26,26 @@ function createAppFactory({runtimeImportPath, moduleImportPath, gitHubUserConfig
     console.log('gitHubAccessTokenConfig', gitHubAccessTokenConfig, '|' + gitHubAccessTokenConfig?.value() + '|')
     console.log('Storing files in', elementoFilesPath)
 
+
     return async (appName, user, version = LATEST) => {
+        const appFileName = `${appName}.mjs`
+        const appModulePath = path.join(elementoFilesPath, version, appFileName)
+        const serverRuntimeModulePath = path.join(elementoFilesPath, version, 'serverRuntime.cjs')
+        const serverRuntimeDownload = downloadModule(`${runtimeImportPath}/serverRuntime.cjs`, serverRuntimeModulePath, moduleCache)
+
+        let moduleDownload
         if (version === 'preview') {
-            const appFileName = `${appName}.mjs`
-            const appModulePath = path.join(elementoFilesPath, version, appFileName)
-            const serverRuntimeModulePath = path.join(elementoFilesPath, version, 'serverRuntime.cjs')
             const cachePath = `${version}/dist/server/${appFileName}`
-            await Promise.all([
-                downloadModule(`${runtimeImportPath}/serverRuntime.cjs`, serverRuntimeModulePath, moduleCache),
-                getFromCache(cachePath, appModulePath, moduleCache)
-            ])
-            const serverAppModule = await import('file://' + appModulePath)
-            const serverApp = serverAppModule.default
-            return serverApp(user)
+            moduleDownload = getFromCache(cachePath, appModulePath, moduleCache)
+        } else {
+            const gitHubVersion = version === LATEST ? 'main' : version
+            const gitHubUrl = `${gitHubServer}/${gitHubUserConfig.value()}/${gitHubRepoConfig.value()}/${gitHubVersion}/dist/server/${appFileName}`
+            const accessToken = gitHubAccessTokenConfig?.value() || undefined
+            console.log('accessToken', accessToken)
+            moduleDownload = downloadModule(gitHubUrl, appModulePath, moduleCache, accessToken)
         }
 
-        const gitHubVersion = version === LATEST ? 'main' : version
-        const appFileName = `${appName}.mjs`
-        const appModulePath = path.join(elementoFilesPath, appFileName)
-        const gitHubUrl = `${gitHubServer}/${gitHubUserConfig.value()}/${gitHubRepoConfig.value()}/${gitHubVersion}/dist/server/${appFileName}`
-        const serverRuntimeModulePath = path.join(elementoFilesPath, 'serverRuntime.cjs')
-        const accessToken = gitHubAccessTokenConfig?.value() || undefined
-        console.log('accessToken', accessToken)
-        await Promise.all([
-            downloadModule(`${runtimeImportPath}/serverRuntime.cjs`, serverRuntimeModulePath, moduleCache),
-            downloadModule(gitHubUrl, appModulePath, moduleCache, accessToken)
-        ])
+        await Promise.all([serverRuntimeDownload, moduleDownload])
         const serverAppModule = await import('file://' + appModulePath)
         const serverApp = serverAppModule.default
         return serverApp(user)
