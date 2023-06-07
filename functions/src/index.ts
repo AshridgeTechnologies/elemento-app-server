@@ -7,7 +7,7 @@ import os from 'os'
 
 initializeApp()
 
-const moduleImportPath = os.tmpdir() + '/' + 'appServer'
+const localFilePath = os.tmpdir() + '/' + 'appServer'
 const runtimeImportPath = 'https://elemento.online/serverRuntime'
 const gitHubUserConfig = defineString('GITHUB_USER')
 const gitHubRepoConfig = defineString('GITHUB_REPO')
@@ -15,7 +15,7 @@ const gitHubAccessTokenConfig = defineString('GITHUB_ACCESS_TOKEN')
 const moduleCache = new CloudStorageCache()
 
 console.log('In index', 'gitHubAccessTokenConfig', gitHubAccessTokenConfig)
-const theAppServer = createAppServer({runtimeImportPath, moduleImportPath,
+const theAppServer = createAppServer({runtimeImportPath, localFilePath,
     gitHubUserConfig, gitHubRepoConfig, gitHubAccessTokenConfig, moduleCache})
 
 export const appServer = functions.https.onRequest(theAppServer)

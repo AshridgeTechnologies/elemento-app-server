@@ -1,4 +1,4 @@
-import express, {RequestHandler} from 'express'
+import express, {RequestHandler, RequestParamHandler} from 'express'
 import {DecodedIdToken, getAuth} from 'firebase-admin/auth'
 import {parseParam} from './util.js'
 
@@ -68,7 +68,7 @@ export const requestHandler = (appFactory: AppFactory) => async (req: any, res: 
     }
 }
 
-export function expressApp(appFactory: AppFactory, putHandler: RequestHandler) {
+export function expressApp(appFactory: AppFactory, putHandler: RequestHandler, htmlHandler: RequestHandler, jsHandler: RequestHandler) {
     const app = express()
     app.use(function (req, res, next) {
         console.log(req.method, req.url)
@@ -78,6 +78,8 @@ export function expressApp(appFactory: AppFactory, putHandler: RequestHandler) {
     app.use('/preview', express.text({type: 'text/*'}))
     app.use(['/capi', '/@*/capi'], requestHandler(appFactory))
     app.put('/preview/*', putHandler)
+    app.get('/*.js', jsHandler)
+    app.get(['/', '/*.html', '/@*', '/@*/*.html'], htmlHandler)
     app.use(errorHandler)
 
     return app
