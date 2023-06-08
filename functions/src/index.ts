@@ -1,5 +1,5 @@
 import * as functions from 'firebase-functions'
-import {defineSecret, defineString} from 'firebase-functions/params'
+import {defineString} from 'firebase-functions/params'
 import {initializeApp} from 'firebase-admin/app'
 import {CloudStorageCache} from './util.js'
 import createAppServer from './appServer.js'
@@ -14,7 +14,6 @@ const gitHubRepoConfig = defineString('GITHUB_REPO')
 const gitHubAccessTokenConfig = defineString('GITHUB_ACCESS_TOKEN')
 const moduleCache = new CloudStorageCache()
 
-console.log('In index', 'gitHubAccessTokenConfig', gitHubAccessTokenConfig)
 const theAppServer = createAppServer({runtimeImportPath, localFilePath,
     gitHubUserConfig, gitHubRepoConfig, gitHubAccessTokenConfig, moduleCache})
 

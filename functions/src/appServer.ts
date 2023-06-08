@@ -31,7 +31,6 @@ function createAppFactory({runtimeImportPath, localFilePath, gitHubUserConfig, g
                               gitHubAccessTokenConfig, moduleCache, gitHubServer = GITHUB_RAW}: AppServerProperties): AppFactory {
     const elementoFilesPath = path.join(localFilePath, 'serverFiles')
     fs.mkdirSync(elementoFilesPath, {recursive: true})
-    console.log('gitHubAccessTokenConfig', gitHubAccessTokenConfig, '|' + gitHubAccessTokenConfig?.value() + '|')
     console.log('Storing files in', elementoFilesPath)
 
 

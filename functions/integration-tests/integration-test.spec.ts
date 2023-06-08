@@ -1,13 +1,8 @@
-import axios from "axios";
-import { expect } from "chai";
+import {test} from 'node:test'
+import {expect} from 'expect'
 
-describe("greet-the-world", () => {
-  it("should respond with the configured greeting", async () => {
-    const expected = "Hello World from greet-the-world";
-
-    const httpFunctionUri = "http://localhost:5001/demo-test/us-central1/ext-greet-the-world-greetTheWorld/";
-    const res = await axios.get(httpFunctionUri);
-
-    return expect(res.data).to.eql(expected);
-  }).timeout(10000);
-});
+test("Runs function in test GitHub repo", async () => {
+  const url = 'http://127.0.0.1:5001/elemento-test/europe-west2/ext-appServer-appServer/capi/ServerApp1/AddTen?abc=20';
+  const result = await fetch(url).then(resp => resp.json())
+  expect(result).toBe(30)
+})
