@@ -20,7 +20,9 @@ export function parseQueryParams(req: {query: { [key: string]: string; }}): obje
 }
 export function errorHandler(err: any, req: any, res: any, _next: any) {
     const {status = 500, message} = err
-    res.status(status).send({error: {status, message}})
+    console.error(message)
+    res?.status(status)
+    res?.send({error: {status, message}})
 }
 
 function responseError(status: number, error: string) {
@@ -51,7 +53,7 @@ export const requestHandler = (appFactory: AppFactory) => async (req: any, res: 
 
         const {func, update, argNames} = handlerApp[functionName] ?? {}
         if (!func) {
-            next(responseError(404, 'Not Found'))
+            next(responseError(404, 'Not Found: ' + functionName))
             return
         }
 

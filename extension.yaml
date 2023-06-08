@@ -33,7 +33,7 @@ apis:
 # Learn more in the docs:
 # https://firebase.google.com/docs/extensions/reference/extension-yaml#roles-field
 roles:
-  - role: storage.objectCreator
+  - role: storage.objectAdmin
     reason: The extension needs to create stored objects when it downloads new code modules
 
 # In the `resources` field, list each of your extension's functions, including the trigger for each function.
@@ -45,18 +45,9 @@ resources:
     description: >-
       HTTP request-triggered function that loads an Elemento app to handle the request
     properties:
+      location: "europe-west2"
       httpsTrigger: {}
       runtime: "nodejs18"
-#  - name: makeuppercase
-#    type: firebaseextensions.v1beta.function
-#    properties:
-#      eventTrigger:
-#        eventType: providers/google.firebase.database/eventTypes/ref.create
-#        # DATABASE_INSTANCE (project's default instance) is an auto-populated
-#        # parameter value. You can also specify an instance.
-#        resource: projects/_/instances/${DATABASE_INSTANCE}/refs/messages/{pushId}/original
-#      runtime: "nodejs18"
-
 
 # In the `params` field, set up your extension's user-configured parameters.
 # Learn more in the docs:

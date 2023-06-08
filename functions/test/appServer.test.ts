@@ -70,7 +70,36 @@ test('app Server', async (t) => {
         }
     })
 
-    let testIndexHtml = async (requestedVersion = '', githubVersion = 'main') => {
+    await t.test('app server runs server app and returns error messages', async () => {
+        const localFilePath = await newModuleImportDir()
+        const {gitHubRequests, gitHubPort, gitHubMockServer} = await mockGitHub(serverAppCode)
+
+        let server: Server | undefined
+        try {
+            const runtimeImportPath = 'http://localhost:1234/serverRuntime'
+            const gitHubServer = `http://localhost:${gitHubPort}`
+            const gitHubUserConfig = { value: () => 'testuser' }
+            const gitHubRepoConfig = { value: () => 'testrepo' }
+            const moduleCache = createModuleCache()
+
+            const theAppServer = await createAppServer({runtimeImportPath, localFilePath, gitHubUserConfig, gitHubRepoConfig, moduleCache, gitHubServer})
+            server = theAppServer.listen(7665)
+
+            const jsonResponse1 = await fetch(`http://localhost:7665/capi/ServerApp1`).then(resp => resp.json())
+            expect(jsonResponse1).toStrictEqual({error: {status: 404, message: 'Not Found'}})
+            const jsonResponse2 = await fetch(`http://localhost:7665/capi/ServerApp1/BadFunction`).then(resp => resp.json())
+            expect(jsonResponse2).toStrictEqual({error: {status: 404, message: 'Not Found: BadFunction'}})
+            const jsonResponse3 = await fetch(`http://localhost:7665/capi/ServerApp1/BlowUp?c=1&d=2`).then(resp => resp.json())
+            expect(jsonResponse3).toStrictEqual({error: {status: 500, message: 'Boom!'}})
+            expect(gitHubRequests).toStrictEqual(['/testuser/testrepo/main/dist/server/ServerApp1.mjs'])
+            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/main/dist/server/ServerApp1.mjs`]).toBe(serverAppCode)
+        } finally {
+            gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
+            server && await new Promise(resolve => server!.close(resolve as () => void))
+        }
+    })
+
+    const testIndexHtml = async (requestedVersion = '', githubVersion = 'main') => {
         const localFilePath = await newModuleImportDir()
         const {gitHubRequests, gitHubPort, gitHubMockServer} = await mockGitHub(indexHtml)
 
@@ -280,8 +309,8 @@ async function Plus(a, b) {
     return Sum(a, b)
 }
 
-async function Mult(c, d) {
-    return c * d
+async function BlowUp(c, d) {
+    throw new Error('Boom!')
 }
 
 async function Total(x, y, z) {
@@ -294,7 +323,7 @@ async function HideMe(where) {
 
 return {
     Plus: {func: Plus, update: false, argNames: ['a', 'b']},
-    Mult: {func: Mult, update: false, argNames: ['c', 'd']},
+    BlowUp: {func: BlowUp, update: false, argNames: ['c', 'd']},
     Total: {func: Total, update: false, argNames: ['x', 'y', 'z']}
 }
 }
