@@ -25,7 +25,7 @@ type ClientHandlerProperties = {
     gitHubServer?: string
 }
 
-const GITHUB_RAW = 'https://raw.githubusercontent.com'
+export const GITHUB_RAW = 'https://raw.githubusercontent.com'
 
 function createAppFactory({runtimeImportPath, localFilePath, gitHubUserConfig, gitHubRepoConfig,
                               gitHubAccessTokenConfig, moduleCache, gitHubServer = GITHUB_RAW}: AppServerProperties): AppFactory {
