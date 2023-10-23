@@ -1,12 +1,13 @@
 import {test} from 'node:test'
 import {expect} from 'expect'
 import createAppServer, {GITHUB_RAW} from '../src/appServer'
-import os from 'os'
-import http, {type IncomingMessage, type Server, type ServerResponse} from 'http'
-import fs from 'fs'
+import * as os from 'os'
+import * as http from 'http'
+import {type IncomingMessage, type Server, type ServerResponse} from 'http'
+import * as fs from 'fs'
 import {type ModuleCache} from '../src/util'
 
-const runtimeImportPath = 'http://localhost:1234/serverRuntime'
+const runtimeImportPath = 'http://127.0.0.1:8000/lib'
 
 const createModuleCache = (): ModuleCache & {modules:any} => ({
     modules: {},
