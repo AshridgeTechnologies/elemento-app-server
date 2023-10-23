@@ -2,8 +2,9 @@ import {test} from 'node:test'
 import {expect} from 'expect'
 
 import {CloudStorageCache} from '../src/util'
-import os from 'os'
-import fs from 'fs'
+import * as os from 'os'
+import * as fs from 'fs'
+// @ts-ignore
 import admin from 'firebase-admin'
 
 const fileContent = 'some code'
