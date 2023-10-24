@@ -76,3 +76,11 @@ params:
     type: string  # should be secret but does not work yet
     required: false
     immutable: false
+
+  - param: X_RUNTIME_IMPORT_PATH
+    label: runtime import path
+    description: >-
+      Test Only - override standard runtime import path
+    type: string
+    required: false
+    immutable: false

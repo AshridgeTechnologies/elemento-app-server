@@ -1,14 +1,14 @@
 import {type AppFactory, expressApp, LATEST} from './expressUtils.js'
 import fs from 'fs'
 import path from 'path'
-import {downloadModule, getFromCache, ModuleCache, putIntoCacheAndFile} from './util.js'
+import {clearCache, downloadModule, getFromCache, ModuleCache, putIntoCacheAndFile} from './util.js'
 
 interface ConfigParam<T> {
     value(): T
 }
 
 type AppServerProperties = {
-    runtimeImportPath: string,
+    runtimeImportPath: ConfigParam<string>,
     localFilePath: string,
     gitHubUserConfig: ConfigParam<string>,
     gitHubRepoConfig: ConfigParam<string>,
@@ -38,7 +38,7 @@ function createAppFactory({runtimeImportPath, localFilePath, gitHubUserConfig, g
         const appFileName = `${appName}.mjs`
         const appModulePath = path.join(elementoFilesPath, version, appFileName)
         const serverRuntimeModulePath = path.join(elementoFilesPath, version, 'serverRuntime.cjs')
-        const serverRuntimeDownload = downloadModule(`${runtimeImportPath}/serverRuntime.cjs`, serverRuntimeModulePath, moduleCache)
+        const serverRuntimeDownload = downloadModule(`${runtimeImportPath.value()}/serverRuntime.cjs`, serverRuntimeModulePath, moduleCache)
 
         let moduleDownload
         if (version === 'preview') {
@@ -77,15 +77,14 @@ const createHtmlHandler = ({localFilePath, gitHubUserConfig, gitHubRepoConfig,
                                gitHubAccessTokenConfig, moduleCache, gitHubServer = GITHUB_RAW}: ClientHandlerProperties) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('html handler', req.url)
-        const version = req.url.match(/\/@([-\w]+)\//)?.[1] ?? LATEST
-
-        const fileName = req.url.endsWith('.html') ? path.basename(req.url) : 'index.html'
-        const filePath = req.url.endsWith('.html') ? req.url : req.url.replace(/\/?$/, '/') + 'index.html'
+        const [, versionSegment, appName, fileName = 'index.html'] = req.url.match(/^\/(@[-\w]+\/)?([-\w]+)\/?([-.\w]+)?$/)
+        const version = versionSegment ? versionSegment.slice(1, -1) : LATEST
+        const filePath = `/${version}/${appName}/${fileName}`
         try {
             const clientDirPath = path.join(localFilePath, 'clientFiles')
             const clientFilePath = clientDirPath + filePath
             const gitHubVersion = version === LATEST ? 'main' : version
-            const gitHubUrl = `${gitHubServer}/${gitHubUserConfig.value()}/${gitHubRepoConfig.value()}/${gitHubVersion}/dist/client/${fileName}`
+            const gitHubUrl = `${gitHubServer}/${gitHubUserConfig.value()}/${gitHubRepoConfig.value()}/${gitHubVersion}/dist/client/${appName}/${fileName}`
             const accessToken = gitHubAccessTokenConfig?.value() || undefined
             await downloadModule(gitHubUrl, clientFilePath, moduleCache, accessToken)
             const fileContents = await fs.promises.readFile(clientFilePath, 'utf8')
@@ -100,15 +99,14 @@ const createJsHandler = ({localFilePath, gitHubUserConfig, gitHubRepoConfig,
                                gitHubAccessTokenConfig, moduleCache, gitHubServer = GITHUB_RAW}: ClientHandlerProperties) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('js handler', req.url)
-        const version = req.url.match(/\/@([-\w]+)\//)?.[1] ?? LATEST
-
-        const fileName = path.basename(req.url)
-        const filePath = req.url
+        const [, versionSegment, appName, fileName] = req.url.match(/^\/(@[-\w]+\/)?([-\w]+)\/([-.\w]+)$/)
+        const version = versionSegment ? versionSegment.slice(1, -1) : LATEST
+        const filePath = `/${version}/${appName}/${fileName}`
         try {
             const clientDirPath = path.join(localFilePath, 'clientFiles')
             const clientFilePath = clientDirPath + filePath
             const gitHubVersion = version === LATEST ? 'main' : version
-            const gitHubUrl = `${gitHubServer}/${gitHubUserConfig.value()}/${gitHubRepoConfig.value()}/${gitHubVersion}/dist/client/${fileName}`
+            const gitHubUrl = `${gitHubServer}/${gitHubUserConfig.value()}/${gitHubRepoConfig.value()}/${gitHubVersion}/dist/client/${appName}/${fileName}`
             const accessToken = gitHubAccessTokenConfig?.value() || undefined
             await downloadModule(gitHubUrl, clientFilePath, moduleCache, accessToken)
             const fileContents = await fs.promises.readFile(clientFilePath, 'utf8')
@@ -119,11 +117,26 @@ const createJsHandler = ({localFilePath, gitHubUserConfig, gitHubRepoConfig,
         }
     }
 
+const createClearHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
+    async (req: any, res: any, next: (err?: any) => void) => {
+        console.log('clear handler', req.url)
+        try {
+            await clearCache(localFilePath, moduleCache)
+            res.end()
+        } catch (err) {
+            next(err)
+        }
+    }
+
+
+
 export default function createAppServer(props: AppServerProperties) {
+    console.log('createAppServer', 'runtimeImportPath', props.runtimeImportPath.value())
     const {localFilePath, moduleCache, gitHubUserConfig, gitHubRepoConfig, gitHubAccessTokenConfig, gitHubServer} = props
     const appFactory = createAppFactory(props)
     const putHandler = createPutHandler({localFilePath, moduleCache})
     const htmlHandler = createHtmlHandler({localFilePath, moduleCache, gitHubUserConfig, gitHubRepoConfig, gitHubAccessTokenConfig, gitHubServer})
     const jsHandler = createJsHandler({localFilePath, moduleCache, gitHubUserConfig, gitHubRepoConfig, gitHubAccessTokenConfig, gitHubServer})
-    return expressApp(appFactory, putHandler, htmlHandler, jsHandler)
+    const clearHandler = createClearHandler({localFilePath, moduleCache})
+    return expressApp(appFactory, putHandler, htmlHandler, jsHandler, clearHandler)
 }

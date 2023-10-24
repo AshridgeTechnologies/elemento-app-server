@@ -10,6 +10,7 @@ const mkdirWriteFile = (localPath: string, contents: string) =>
         fs.promises.mkdir(path.dirname(localPath), {recursive: true})
         .then( () => fs.promises.writeFile(localPath, contents) )
 
+const rmdir = (localPath: string) => fs.promises.rm(localPath, {recursive: true, force: true})
 const isNumeric = (s: string) : boolean => s!== '' && s.match(/^\d*\.?\d*$/) !== null
 const isBooleanString = (s: string) : boolean => s.match(/true|false/) !== null
 
@@ -33,6 +34,7 @@ export const parseParam = (param: string) => {
 export interface ModuleCache {
     downloadToFile(path: string, localFilePath: string): Promise<boolean>
     store(path: string, text: string): Promise<void>
+    clear(): Promise<void>
 }
 
 async function downloadFile(url: string, accessToken: string | undefined) {
@@ -76,6 +78,11 @@ export async function putIntoCacheAndFile(cachePath: string, localPath: string, 
     ])
 }
 
+export async function clearCache(localPath: string, cache: ModuleCache) {
+    rmdir(localPath)
+    return cache.clear()
+}
+
 export class CloudStorageCache implements ModuleCache {
     constructor(private readonly bucketName?: string) {
     }
@@ -86,6 +93,12 @@ export class CloudStorageCache implements ModuleCache {
 
     store(path: string, text: string): Promise<void> {
         return getStorage().bucket(this.bucketName).file(this.cachePath(path)).save(text)
+    }
+
+    async clear(): Promise<void> {
+        let bucket = getStorage().bucket(this.bucketName)
+        const [cacheFiles] = await bucket.getFiles({prefix: this.cachePath('')})
+        await Promise.all(cacheFiles.map( f => bucket.file(f.name).delete()))
     }
 
     private cachePath(path: string) {

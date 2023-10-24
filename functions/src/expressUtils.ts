@@ -70,7 +70,7 @@ export const requestHandler = (appFactory: AppFactory) => async (req: any, res: 
     }
 }
 
-export function expressApp(appFactory: AppFactory, putHandler: RequestHandler, htmlHandler: RequestHandler, jsHandler: RequestHandler) {
+export function expressApp(appFactory: AppFactory, putHandler: RequestHandler, htmlHandler: RequestHandler, jsHandler: RequestHandler, clearHandler?: RequestHandler) {
     const app = express()
     app.use(function (req, res, next) {
         console.log(req.method, req.url)
@@ -80,8 +80,9 @@ export function expressApp(appFactory: AppFactory, putHandler: RequestHandler, h
     app.use('/preview', express.text({type: 'text/*'}))
     app.use(['/capi', '/@*/capi'], requestHandler(appFactory))
     app.put('/preview/*', putHandler)
+    clearHandler && app.post('/clearcache', clearHandler)
     app.get('/*.js', jsHandler)
-    app.get(['/', '/*.html', '/@*', '/@*/*.html'], htmlHandler)
+    app.get(['/*', '/@*/*'], htmlHandler)
     app.use(errorHandler)
 
     return app

@@ -8,6 +8,7 @@ import * as fs from 'fs'
 import {type ModuleCache} from '../src/util'
 
 const runtimeImportPath = 'http://127.0.0.1:8000/lib'
+const runtimeImportPathParam = {value: () => 'http://127.0.0.1:8000/lib'}
 
 const createModuleCache = (): ModuleCache & {modules:any} => ({
     modules: {},
@@ -17,7 +18,12 @@ const createModuleCache = (): ModuleCache & {modules:any} => ({
     store(path: string, text: string): Promise<void> {
         this.modules[path] = text
         return Promise.resolve()
+    },
+    clear() {
+        this.modules = {}
+        return Promise.resolve()
     }
+
 })
 
 let dirSeq = 0
@@ -57,7 +63,7 @@ async function makeAppServer(localFilePath: string,
     const gitHubUserConfig = { value: () => 'testuser' }
     const gitHubRepoConfig = { value: () => 'testrepo' }
     const theAppServer = await createAppServer({
-        runtimeImportPath,
+        runtimeImportPath: runtimeImportPathParam,
         localFilePath,
         gitHubUserConfig,
         gitHubRepoConfig,
@@ -116,12 +122,14 @@ test('app Server', async (t) => {
     const testIndexHtml = async (requestedVersion = '', githubVersion = 'main') => {
         const {gitHubRequests, gitHubMockServer} = await mockGitHub(indexHtml);
         ({server, serverPort} = await makeAppServer(localFilePath, 'testuser', 'testrepo', moduleCache, gitHubServer))
+        const requestedVersionSegment = requestedVersion ? requestedVersion + '/' : ''
 
         try {
-            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersion ? requestedVersion + '/' : ''}/index.html`)).toBe(indexHtml)
-            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersion}`)).toBe(indexHtml)
-            expect(gitHubRequests).toStrictEqual([`/testuser/testrepo/${githubVersion}/dist/client/index.html`])
-            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/${githubVersion}/dist/client/index.html`]).toBe(indexHtml)
+            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/index.html`)).toBe(indexHtml)
+            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp`)).toBe(indexHtml)
+            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/`)).toBe(indexHtml)
+            expect(gitHubRequests).toStrictEqual([`/testuser/testrepo/${githubVersion}/dist/client/NewApp/index.html`])
+            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/${githubVersion}/dist/client/NewApp/index.html`]).toBe(indexHtml)
             expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).toBe(undefined)
         } finally {
             gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
@@ -136,9 +144,9 @@ test('app Server', async (t) => {
         ({server, serverPort} = await makeAppServer(localFilePath, 'testuser', 'testrepo', moduleCache, gitHubServer))
 
         try {
-            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersion ? requestedVersion + '/' : ''}/clientApp1.js`)).toBe(clientApp1Js)
-            expect(gitHubRequests).toStrictEqual([`/testuser/testrepo/${githubVersion}/dist/client/clientApp1.js`])
-            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/${githubVersion}/dist/client/clientApp1.js`]).toBe(clientApp1Js)
+            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersion ? requestedVersion + '/' : ''}NewApp/clientApp1.js`)).toBe(clientApp1Js)
+            expect(gitHubRequests).toStrictEqual([`/testuser/testrepo/${githubVersion}/dist/client/NewApp/clientApp1.js`])
+            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/${githubVersion}/dist/client/NewApp/clientApp1.js`]).toBe(clientApp1Js)
             expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).toBe(undefined)
         } finally {
             gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
@@ -171,7 +179,7 @@ test('app Server', async (t) => {
             const gitHubRepoConfig = { value: () => 'rabbits-4' }
             const moduleCache = createModuleCache()
 
-            const theAppServer = await createAppServer({runtimeImportPath, localFilePath, gitHubUserConfig, gitHubRepoConfig, moduleCache, gitHubServer: GITHUB_RAW})
+            const theAppServer = await createAppServer({runtimeImportPath: runtimeImportPathParam, localFilePath, gitHubUserConfig, gitHubRepoConfig, moduleCache, gitHubServer: GITHUB_RAW})
             server = theAppServer.listen(7656)
 
             expect(await fetchJson(`http://localhost:7656/capi/ServerApp1/AddTen?abc=5`)).toBe(15)
@@ -187,7 +195,7 @@ test('app Server', async (t) => {
             const gitHubRepoConfig = { value: () => 'rabbits-4' }
             const moduleCache = createModuleCache()
 
-            const theAppServer = await createAppServer({runtimeImportPath, localFilePath, gitHubUserConfig, gitHubRepoConfig, moduleCache, gitHubServer: GITHUB_RAW})
+            const theAppServer = await createAppServer({runtimeImportPath: runtimeImportPathParam, localFilePath, gitHubUserConfig, gitHubRepoConfig, moduleCache, gitHubServer: GITHUB_RAW})
             server = theAppServer.listen(7660)
 
             expect(await fetchJson(`http://localhost:7660/@test-version/capi/ServerApp1/AddTwenty?abc=5`)).toBe(25)
@@ -205,7 +213,7 @@ test('app Server', async (t) => {
             const gitHubAccessTokenConfig = { value: () => gitHubAccessToken }
             const moduleCache = createModuleCache()
 
-            const theAppServer = await createAppServer({runtimeImportPath, localFilePath,
+            const theAppServer = await createAppServer({runtimeImportPath: runtimeImportPathParam, localFilePath,
                 gitHubUserConfig, gitHubRepoConfig, gitHubAccessTokenConfig, moduleCache, gitHubServer: GITHUB_RAW})
             server = theAppServer.listen(7657)
 

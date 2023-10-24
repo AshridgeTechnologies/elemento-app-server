@@ -8,7 +8,7 @@ import os from 'os'
 initializeApp()
 
 const localFilePath = os.tmpdir() + '/' + 'appServer'
-const runtimeImportPath = 'https://elemento.online/lib'
+const runtimeImportPath = defineString('X_RUNTIME_IMPORT_PATH') ?? {value: ()=> 'https://elemento.online/lib'}
 const gitHubUserConfig = defineString('GITHUB_USER')
 const gitHubRepoConfig = defineString('GITHUB_REPO')
 const gitHubAccessTokenConfig = defineString('GITHUB_ACCESS_TOKEN')
