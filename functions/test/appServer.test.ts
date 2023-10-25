@@ -52,8 +52,12 @@ async function mockGitHub(contents: string | Uint8Array) {
     return {gitHubRequests, gitHubMockServer}
 }
 
-const fetchJson = (url: string) => fetch(url).then(resp => resp.json())
-const fetchText = (url: string) => fetch(url).then(resp => resp.text())
+const fetchJson = (url: string) => fetch(url, {headers: { Accept: 'application/json'}}).then(resp => {
+    expect(resp.headers.get('Content-Type')).toBe('application/json; charset=utf-8')
+    return resp.json()
+})
+const fetchJs = (url: string) => fetch(url, {headers: { Accept: 'text/javascript'}}).then(resp => Promise.all([resp.text(), resp.headers.get('Content-Type')]))
+const fetchText = (url: string) => fetch(url, {headers: { Accept: 'text/html'}}).then(resp => Promise.all([resp.text(), resp.headers.get('Content-Type')]))
 const fetchData = (url: string) => fetch(url).then(resp => resp.arrayBuffer())
 
 async function makeAppServer(localFilePath: string,
@@ -127,9 +131,9 @@ test('app Server', async (t) => {
         const requestedVersionSegment = requestedVersion ? requestedVersion + '/' : ''
 
         try {
-            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/index.html`)).toBe(indexHtml)
-            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp`)).toBe(indexHtml)
-            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/`)).toBe(indexHtml)
+            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/index.html`)).toStrictEqual([indexHtml, 'text/html; charset=utf-8'])
+            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp`)).toStrictEqual([indexHtml, 'text/html; charset=utf-8'])
+            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/`)).toStrictEqual([indexHtml, 'text/html; charset=utf-8'])
             expect(gitHubRequests).toStrictEqual([`/testuser/testrepo/${githubVersion}/dist/client/NewApp/index.html`])
             expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/${githubVersion}/dist/client/NewApp/index.html`].toString()).toBe(indexHtml)
             expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).toBe(undefined)
@@ -147,7 +151,7 @@ test('app Server', async (t) => {
         const requestedVersionSegment = requestedVersion ? requestedVersion + '/' : ''
 
         try {
-            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/clientApp1.js`)).toBe(clientApp1Js)
+            expect(await fetchJs(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/clientApp1.js`)).toStrictEqual([clientApp1Js, 'application/javascript; charset=utf-8'])
             expect(gitHubRequests).toStrictEqual([`/testuser/testrepo/${githubVersion}/dist/client/NewApp/clientApp1.js`])
             expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/${githubVersion}/dist/client/NewApp/clientApp1.js`].toString()).toBe(clientApp1Js)
             expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).toBe(undefined)
