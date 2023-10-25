@@ -65,7 +65,7 @@ const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, 
             const elementoFilesPath = path.join(localFilePath, 'serverFiles')
             const appModulePath = path.join(elementoFilesPath, req.url)
             const cachePath = req.url
-            const moduleContents = req.body as string
+            const moduleContents = req.body as Buffer
             await putIntoCacheAndFile(cachePath, appModulePath, moduleCache, moduleContents)
             res.end()
         } catch (err) {
@@ -87,7 +87,7 @@ const createHtmlHandler = ({localFilePath, gitHubUserConfig, gitHubRepoConfig,
             const gitHubUrl = `${gitHubServer}/${gitHubUserConfig.value()}/${gitHubRepoConfig.value()}/${gitHubVersion}/dist/client/${appName}/${fileName}`
             const accessToken = gitHubAccessTokenConfig?.value() || undefined
             await downloadModule(gitHubUrl, clientFilePath, moduleCache, accessToken)
-            const fileContents = await fs.promises.readFile(clientFilePath, 'utf8')
+            const fileContents = await fs.promises.readFile(clientFilePath)
             res.setHeader('Content-Type', 'text/html')
             res.send(fileContents)
         } catch (err) {
@@ -109,7 +109,7 @@ const createJsHandler = ({localFilePath, gitHubUserConfig, gitHubRepoConfig,
             const gitHubUrl = `${gitHubServer}/${gitHubUserConfig.value()}/${gitHubRepoConfig.value()}/${gitHubVersion}/dist/client/${appName}/${fileName}`
             const accessToken = gitHubAccessTokenConfig?.value() || undefined
             await downloadModule(gitHubUrl, clientFilePath, moduleCache, accessToken)
-            const fileContents = await fs.promises.readFile(clientFilePath, 'utf8')
+            const fileContents = await fs.promises.readFile(clientFilePath)
             res.setHeader('Content-Type', 'text/javascript')
             res.send(fileContents)
         } catch (err) {

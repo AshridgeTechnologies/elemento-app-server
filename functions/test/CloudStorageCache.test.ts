@@ -8,6 +8,8 @@ import * as fs from 'fs'
 import admin from 'firebase-admin'
 
 const fileContent = 'some code'
+const fileContentBuf = Buffer.from(fileContent, 'utf8')
+
 const bucketName = 'elemento-unit-test.appspot.com'
 
 const serviceAccount = JSON.parse(fs.readFileSync('private/elemento-unit-test-service-account-key.json', 'utf8'))
@@ -23,7 +25,7 @@ test('app Server', async (t) => {
 
         const cache = new CloudStorageCache()
         await expect(cache.downloadToFile(fileUrl, downloadFilePath)).resolves.toBe(false)
-        await cache.store(fileUrl, fileContent)
+        await cache.store(fileUrl, fileContentBuf)
         await expect(cache.downloadToFile(fileUrl, downloadFilePath)).resolves.toBe(true)
         const retrievedContent = await fs.promises.readFile(downloadFilePath, 'utf8')
         expect(retrievedContent).toBe(fileContent)
@@ -37,7 +39,7 @@ test('app Server', async (t) => {
         const downloadFilePath = downloadDir + '/' + 'retrievedFile.txt'
 
         const cache = new CloudStorageCache()
-        await cache.store(fileUrl, fileContent)
+        await cache.store(fileUrl, fileContentBuf)
         await cache.clear()
         await expect(cache.downloadToFile(fileUrl, downloadFilePath)).resolves.toBe(false)
     })

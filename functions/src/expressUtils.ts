@@ -77,7 +77,7 @@ export function expressApp(appFactory: AppFactory, putHandler: RequestHandler, h
         next()
     })
     app.use(['/capi', '/@*/capi'], express.json())
-    app.use('/preview', express.text({type: 'text/*'}))
+    app.use('/preview', express.raw({type: '*/*'}))
     app.use(['/capi', '/@*/capi'], requestHandler(appFactory))
     app.put('/preview/*', putHandler)
     clearHandler && app.post('/clearcache', clearHandler)

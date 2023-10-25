@@ -1,12 +1,12 @@
 import fs from 'fs'
-import axios from 'axios'
+import axios, {type ResponseType} from 'axios'
 import {parseISO} from 'date-fns'
 import {getStorage} from 'firebase-admin/storage'
 import path from 'path'
 
 const fileExists = (filePath: string): Promise<boolean> => fs.promises.access(filePath).then(() => true, () => false)
 
-const mkdirWriteFile = (localPath: string, contents: string) =>
+const mkdirWriteFile = (localPath: string, contents: Buffer) =>
         fs.promises.mkdir(path.dirname(localPath), {recursive: true})
         .then( () => fs.promises.writeFile(localPath, contents) )
 
@@ -33,13 +33,15 @@ export const parseParam = (param: string) => {
 
 export interface ModuleCache {
     downloadToFile(path: string, localFilePath: string): Promise<boolean>
-    store(path: string, text: string): Promise<void>
+    store(path: string, contents: Buffer): Promise<void>
     clear(): Promise<void>
 }
 
-async function downloadFile(url: string, accessToken: string | undefined) {
+async function downloadFile(url: string, accessToken: string | undefined): Promise<Buffer> {
     console.log('Downloading', url)
-    const options = accessToken ? {headers: { Authorization: `Bearer ${accessToken}`}} : {}
+    const responseType = 'arraybuffer' as ResponseType
+    const headers = accessToken ? {headers: { Authorization: `Bearer ${accessToken}`}} : {}
+    const options = {responseType, ...headers}
     const resp = await axios.get(url, options)
     if (resp.status !== 200) {
         throw new Error(resp.status + ' ' + resp.statusText)
@@ -71,16 +73,15 @@ export async function getFromCache(cachePath: string, localPath: string, cache: 
     }
 }
 
-export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: string) {
+export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: Buffer) {
     await Promise.all([
         mkdirWriteFile(localPath, contents),
         cache.store(cachePath, contents)
     ])
 }
 
-export async function clearCache(localPath: string, cache: ModuleCache) {
-    rmdir(localPath)
-    return cache.clear()
+export function clearCache(localPath: string, cache: ModuleCache) {
+    return Promise.all([rmdir(localPath), cache.clear()])
 }
 
 export class CloudStorageCache implements ModuleCache {
@@ -91,8 +92,8 @@ export class CloudStorageCache implements ModuleCache {
         return getStorage().bucket(this.bucketName).file(this.cachePath(path)).download({destination: localFilePath}).then( () => true, () => false )
     }
 
-    store(path: string, text: string): Promise<void> {
-        return getStorage().bucket(this.bucketName).file(this.cachePath(path)).save(text)
+    store(path: string, contents: Buffer): Promise<void> {
+        return getStorage().bucket(this.bucketName).file(this.cachePath(path)).save(contents)
     }
 
     async clear(): Promise<void> {
