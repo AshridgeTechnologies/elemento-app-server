@@ -4,6 +4,7 @@ import {initializeApp} from 'firebase-admin/app'
 import {CloudStorageCache} from './util.js'
 import createAppServer from './appServer.js'
 import os from 'os'
+import createAdminServer from './adminServer'
 
 initializeApp()
 
@@ -18,3 +19,6 @@ const theAppServer = createAppServer({runtimeImportPath, localFilePath,
     gitHubUserConfig, gitHubRepoConfig, gitHubAccessTokenConfig, moduleCache})
 
 export const appServer = functions.https.onRequest(theAppServer)
+
+const theAdminServer = createAdminServer({localFilePath})
+export const adminServer = functions.https.onRequest(theAdminServer)

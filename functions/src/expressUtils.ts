@@ -86,3 +86,17 @@ export function expressApp(appFactory: AppFactory, putHandler: RequestHandler, f
 
     return app
 }
+
+export function expressAdminApp(deployHandler: RequestHandler) {
+    const app = express()
+    app.use(function (req, res, next) {
+        console.log(req.method, req.url)
+        next()
+    })
+
+    app.use(['/deploy', ], express.json())
+    app.post('/deploy/*', deployHandler)
+
+    app.use(errorHandler)
+    return app
+}
