@@ -64,6 +64,15 @@ const cloneRepo = (username: string, repo: string, accessToken: string, dir: str
     })
 }
 
+const getLatestCommitId = async (dir: string) => {
+    const commits = await git.log({
+        fs,
+        dir,
+        depth: 1,
+    })
+    return commits[0].oid
+}
+
 const files =  async (dir: string): Promise<{[path: string] : {filePath: string, hash: string, gzip: Uint8Array}}> => {
     const files = await fs.promises.readdir(dir, {recursive: true, withFileTypes: true})
         .then( files => files.filter( f => f.isFile() ).map( f => `${f.path}/${f.name}` ) )
@@ -97,7 +106,12 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
     await cloneRepo(username, repo, gitHubAccessToken, checkoutPath)
     console.log('checked out files', await fs.promises.readdir(checkoutPath))
 
+    const metadata = {
+        deployTime: new Date().toISOString(),
+        commitId: await getLatestCommitId(checkoutPath)
+    }
     const deployPath = `${checkoutPath}/dist/client`
+    await fs.promises.writeFile(`${deployPath}/version`, JSON.stringify(metadata, null, 2), 'utf8')
     const filesToDeploy = await files(deployPath)
     console.log('files to deploy', Object.keys(filesToDeploy))
 

@@ -6,6 +6,7 @@ import * as fs from 'fs'
 import {type ModuleCache} from '../src/util'
 import createAdminServer from '../src/adminServer'
 import {getAccessToken} from './testUtil'
+import git from 'isomorphic-git'
 
 const createModuleCache = (): ModuleCache & {modules:any} => ({
     modules: {},
@@ -28,6 +29,15 @@ async function newTestDir() {
     const localFilePath = `${os.tmpdir()}/adminServer.test.${++dirSeq}`
     await fs.promises.rm(localFilePath, {force: true, recursive: true}).then(() => fs.promises.mkdir(localFilePath, {recursive: true}))
     return localFilePath
+}
+
+const getLatestCommitId = async (dir: string) => {
+    const commits = await git.log({
+        fs,
+        dir,
+        depth: 1,
+    })
+    return commits[0].oid
 }
 
 const gitHubPort = 7654
@@ -84,22 +94,19 @@ test('admin Server', async (t) => {
 
             const htmlPage = await fetch('https://elemento-hosting-test.web.app/MainApp').then( resp => resp.text() )
             expect(htmlPage).toContain('<title>Main App</title>')
+
+            const versionInfo = await fetch('https://elemento-hosting-test.web.app/version').then( resp => resp.json() )
+            const {deployTime} = versionInfo
+            const deployTimeMillis = new Date(deployTime).getTime()
+            expect(deployTimeMillis - Date.now()).toBeLessThan(5000)
+
+            const deployDir = `${localFilePath}/deploy`
+            const checkoutDir = (await fs.promises.readdir(deployDir))[0]
+            const checkoutPath = `${deployDir}/${checkoutDir}`
+            const commitId = await getLatestCommitId(checkoutPath)
+            expect(versionInfo.commitId).toBe(commitId)
         } finally {
             server && await new Promise(resolve => server!.close(resolve as () => void))
         }
     })
 })
-
-/*
-To do
-  - New test project
-  - Save to new private repo in rileydog
-  - Get access token for repo
-  - Get service account key for elemento-hosting-test
-  - Convert key into access token
-  - Import access tokens into test
-  - Run and try result manually
-  - Return status from POST call, check in test
-  - Check get index.html
-- Put version file into deployment and test
- */
