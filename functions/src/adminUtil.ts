@@ -83,7 +83,8 @@ const files =  async (dir: string): Promise<{[path: string] : {filePath: string,
 }
 
 export async function deployToHosting({username, repo, firebaseProject, checkoutPath, googleAccessToken, gitHubAccessToken}:
-                                          {username: string, repo: string, firebaseProject: string, checkoutPath: string, googleAccessToken: string, gitHubAccessToken: string}) {
+                                          {username: string, repo: string, firebaseProject: string, checkoutPath: string,
+                                              googleAccessToken: string, gitHubAccessToken: string}) {
 
     const {sites} = await hostingRequest(`projects/${firebaseProject}/sites`, googleAccessToken)
     console.log('sites', sites)
@@ -139,4 +140,5 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
 
     const releaseResult = await hostingRequest(`sites/${siteName}/releases?versionName=${version.name}`, googleAccessToken, 'POST')
     console.log('release', releaseResult)
+    return releaseResult
 }

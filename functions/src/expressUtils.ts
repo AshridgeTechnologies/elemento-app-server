@@ -95,7 +95,7 @@ export function expressAdminApp(deployHandler: RequestHandler) {
     })
 
     app.use(['/deploy', ], express.json())
-    app.post('/deploy/*', deployHandler)
+    app.post('/deploy', deployHandler)
 
     app.use(errorHandler)
     return app
