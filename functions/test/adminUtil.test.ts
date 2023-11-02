@@ -11,7 +11,7 @@ const serviceAccountKey = JSON.parse(fs.readFileSync('private/hosted-apps-spike-
 
 test('admin util', async (t) => {
 
-    const googleAccessToken = await getAccessToken(serviceAccountKey)
+    const firebaseAccessToken = await getAccessToken(serviceAccountKey)
     const gitHubAccessToken = await fs.promises.readFile('private/githubRabbits5RepoToken_finegrained.txt', 'utf8')
 
     const checkoutPath = `${os.tmpdir}/adminUtil.test/checkout`
@@ -22,6 +22,6 @@ test('admin util', async (t) => {
         await deployToHosting({
             username: 'rileydog16', repo: '-Beetle1-',
             firebaseProject: 'hosted-apps-spike-1',
-            checkoutPath, googleAccessToken, gitHubAccessToken})
+            checkoutPath, firebaseAccessToken: firebaseAccessToken, gitHubAccessToken})
     })
 })

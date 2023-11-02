@@ -71,7 +71,7 @@ test('admin Server', async (t) => {
 
         const gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1RepoToken_finegrained.txt', 'utf8')
         const serviceAccountKey = JSON.parse(fs.readFileSync('private/elemento-hosting-test-firebase-adminsdk-7en27-f3397ab7af.json', 'utf8'))
-        const googleAccessToken = await getAccessToken(serviceAccountKey)
+        const firebaseAccessToken = await getAccessToken(serviceAccountKey)
 
         const requestData = {
             firebaseProject: 'elemento-hosting-test',
@@ -80,7 +80,7 @@ test('admin Server', async (t) => {
         }
         const headers = {
             'Content-Type': 'application/json',
-            'X-Google-Access-Token': googleAccessToken,
+            'x-firebase-access-token': firebaseAccessToken,
             'X-GitHub-Access-Token': gitHubAccessToken,
         }
 

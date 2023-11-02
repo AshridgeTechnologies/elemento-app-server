@@ -1,13 +1,10 @@
-// import gaxios from 'gaxios'
-// import {google} from 'googleapis'
-// import {Credentials} from 'google-auth-library'
 import axios, {ResponseType} from 'axios'
 import git from 'isomorphic-git'
-import http from 'isomorphic-git/http/node'
+import http from 'isomorphic-git/http/node/index.js'
 import {gzipSync} from 'fflate'
-import {mapObjIndexed} from 'ramda'
 
 import fs from 'fs'
+import crypto from 'crypto'
 
 
 
@@ -91,16 +88,16 @@ const files =  async (dir: string): Promise<{[path: string] : {filePath: string,
     return Object.fromEntries(fullFileEntries.map( f => [f.filePath, f]))
 }
 
-export async function deployToHosting({username, repo, firebaseProject, checkoutPath, googleAccessToken, gitHubAccessToken}:
+export async function deployToHosting({username, repo, firebaseProject, checkoutPath, firebaseAccessToken, gitHubAccessToken}:
                                           {username: string, repo: string, firebaseProject: string, checkoutPath: string,
-                                              googleAccessToken: string, gitHubAccessToken: string}) {
+                                              firebaseAccessToken: string, gitHubAccessToken: string}) {
 
-    const {sites} = await hostingRequest(`projects/${firebaseProject}/sites`, googleAccessToken)
+    const {sites} = await hostingRequest(`projects/${firebaseProject}/sites`, firebaseAccessToken)
     console.log('sites', sites)
 
     const site = sites.find((s: any) => s.type === 'DEFAULT_SITE')
     const siteName = site.name.match(/[^/]+$/)[0]
-    const version = await hostingRequest(`sites/${siteName}/versions`, googleAccessToken, 'POST')
+    const version = await hostingRequest(`sites/${siteName}/versions`, firebaseAccessToken, 'POST')
     console.log('version', version)
 
     await cloneRepo(username, repo, gitHubAccessToken, checkoutPath)
@@ -115,8 +112,8 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
     const filesToDeploy = await files(deployPath)
     console.log('files to deploy', Object.keys(filesToDeploy))
 
-    const filesToPopulate = mapObjIndexed( ({hash}) => hash, filesToDeploy )
-    const populateFilesResult = await hostingRequest(`${version.name}:populateFiles`, googleAccessToken, 'POST', {files: filesToPopulate})
+    const filesToPopulate = Object.fromEntries(Object.entries(filesToDeploy).map( ([path, {hash}]) => [path, hash]))
+    const populateFilesResult = await hostingRequest(`${version.name}:populateFiles`, firebaseAccessToken, 'POST', {files: filesToPopulate})
     console.log('populateFilesResult', populateFilesResult)
 
     const {uploadUrl, uploadRequiredHashes} = populateFilesResult
@@ -126,7 +123,7 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
         const file = Object.values(filesToDeploy).find(f => f.hash === hash)
         const {filePath, gzip} = file!
         try {
-            await uploadFile(uploadUrl, filePath, hash, gzip, googleAccessToken)
+            await uploadFile(uploadUrl, filePath, hash, gzip, firebaseAccessToken)
             console.log('Uploaded', filePath)
         } catch (err) {
             console.error('Failed to upload', filePath, err)
@@ -142,7 +139,7 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
         run: {serviceId: 'serverapp1', region: 'europe-west2'}}
     ] :*/ [] as any
     const spaRewrite = {glob: '**', path: '/index.html'}
-    const patchResult = await hostingRequest(`${version.name}?update_mask=status,config`, googleAccessToken, 'PATCH',
+    const patchResult = await hostingRequest(`${version.name}?update_mask=status,config`, firebaseAccessToken, 'PATCH',
         {
             status: 'FINALIZED',
             config: {
@@ -152,7 +149,7 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
 
     console.log('patch', patchResult)
 
-    const releaseResult = await hostingRequest(`sites/${siteName}/releases?versionName=${version.name}`, googleAccessToken, 'POST')
+    const releaseResult = await hostingRequest(`sites/${siteName}/releases?versionName=${version.name}`, firebaseAccessToken, 'POST')
     console.log('release', releaseResult)
     return releaseResult
 }

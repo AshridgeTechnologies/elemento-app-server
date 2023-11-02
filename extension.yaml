@@ -10,7 +10,7 @@ displayName: Elemento App Server
 
 # Brief description of the task your extension performs (~1 sentence)
 description: >-
-  Runs Elemento server apps.
+  Runs Elemento server apps and deploy client apps to hosting.
 
 license: Apache-2.0  # https://spdx.org/licenses/
 
@@ -44,6 +44,15 @@ resources:
     type: firebaseextensions.v1beta.function
     description: >-
       HTTP request-triggered function that loads an Elemento app to handle the request
+    properties:
+      location: "europe-west2"
+      httpsTrigger: {}
+      runtime: "nodejs18"
+
+  - name: adminServer
+    type: firebaseextensions.v1beta.function
+    description: >-
+      HTTP request-triggered function that does admin operations on the site
     properties:
       location: "europe-west2"
       httpsTrigger: {}

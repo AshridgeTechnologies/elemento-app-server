@@ -1,7 +1,7 @@
 import {Request} from 'express'
 import {expressAdminApp} from './expressUtils.js'
 import path from 'path'
-import {deployToHosting} from './adminUtil'
+import {deployToHosting} from './adminUtil.js'
 
 const checkData = (value: string | undefined, name: string) => {
     if (!value) {
@@ -14,19 +14,19 @@ const createDeployHandler = ({localFilePath}: {localFilePath: string}) =>
         console.log('deploy handler', req.url)
         try {
             const {username, repo, firebaseProject} = req.body
-            const googleAccessToken = req.get('X-Google-Access-Token')
-            const gitHubAccessToken = req.get('X-GitHub-Access-Token')
+            const firebaseAccessToken = req.get('x-firebase-access-token')
+            const gitHubAccessToken = req.get('x-github-access-token')
 
-            checkData(googleAccessToken, 'Google access token')
-            checkData(gitHubAccessToken, 'GitHub access token')
             checkData(username, 'GitHub username')
             checkData(repo, 'GitHub repo')
             checkData(firebaseProject, 'Firebase Project')
+            checkData(gitHubAccessToken, 'GitHub access token')
+            checkData(firebaseAccessToken, 'Google access token')
 
             const deployTag = new Date().toISOString().substring(0, 19)
             const checkoutPath = path.join(localFilePath, 'deploy', deployTag)
             const releaseResult = await deployToHosting({username, repo, firebaseProject, checkoutPath,
-                googleAccessToken: googleAccessToken!, gitHubAccessToken: gitHubAccessToken!})
+                firebaseAccessToken: firebaseAccessToken!, gitHubAccessToken: gitHubAccessToken!})
             res.send(releaseResult)
         } catch (err) {
             next(err)
