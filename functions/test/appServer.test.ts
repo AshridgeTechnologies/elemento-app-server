@@ -1,19 +1,26 @@
 import {test} from 'node:test'
 import {expect} from 'expect'
-import createAppServer, {GITHUB_RAW} from '../src/appServer'
+import createAppServer from '../src/appServer'
 import * as os from 'os'
-import * as http from 'http'
-import {type IncomingMessage, type Server, type ServerResponse} from 'http'
+import {type Server} from 'http'
 import * as fs from 'fs'
+import * as path from 'path'
 import {type ModuleCache} from '../src/util'
+import createAdminServer from '../src/adminServer'
 
 const runtimeImportPath = 'http://127.0.0.1:8000/lib'
 const runtimeImportPathParam = {value: () => 'http://127.0.0.1:8000/lib'}
 
 const createModuleCache = (): ModuleCache & {modules:any} => ({
     modules: {},
-    downloadToFile(path: string, _: string): Promise<boolean> {
-        return Promise.resolve(!!this.modules[path])
+    downloadToFile(cachePath: string, localPath: string): Promise<boolean> {
+        if (this.modules[cachePath]) {
+            const dir = path.dirname(localPath)
+            return fs.promises.mkdir(dir, {recursive: true})
+                    .then( () => fs.promises.writeFile(localPath, this.modules[cachePath]))
+                    .then( () => true )
+        }
+        return Promise.resolve(false)
     },
     store(path: string, contents: Buffer): Promise<void> {
         this.modules[path] = contents
@@ -33,50 +40,22 @@ async function newModuleImportDir() {
     return localFilePath
 }
 
-const gitHubPort = 7654
-const gitHubServer = `http://localhost:${gitHubPort}`
-
-async function mockGitHub(contents: string | Uint8Array) {
-    const gitHubRequests: string[] = []
-    const requestListener = function (req: IncomingMessage, res: ServerResponse) {
-        gitHubRequests.push(req.url!)
-        console.log('Request', req.url)
-        const header = typeof contents === 'string' ? 'text/plain' : 'application/octet-stream'
-        res.setHeader('Content-Type', header)
-        res.writeHead(200)
-        res.end(contents)
-    }
-
-    const gitHubMockServer = http.createServer(requestListener)
-    await new Promise(resolve => gitHubMockServer.listen(gitHubPort, resolve as () => void))
-    return {gitHubRequests, gitHubMockServer}
-}
-
 const fetchJson = (url: string) => fetch(url, {headers: { Accept: 'application/json'}}).then(resp => {
     expect(resp.headers.get('Content-Type')).toBe('application/json; charset=utf-8')
     return resp.json()
 })
-const fetchJs = (url: string) => fetch(url, {headers: { Accept: 'text/javascript'}}).then(resp => Promise.all([resp.text(), resp.headers.get('Content-Type')]))
-const fetchText = (url: string) => fetch(url, {headers: { Accept: 'text/html'}}).then(resp => Promise.all([resp.text(), resp.headers.get('Content-Type')]))
-const fetchData = (url: string) => fetch(url).then(resp => resp.arrayBuffer())
 
-async function makeAppServer(localFilePath: string,
-                             gitHubUser: string,
-                             gitHubRepo: string,
-                             moduleCache: ModuleCache & { modules: any },
-                             gitHubServer?: string) {
+async function makeAppServer(localFilePath: string, moduleCache: ModuleCache & { modules: any }) {
     const serverPort = 7655
-    const gitHubUserConfig = { value: () => 'testuser' }
-    const gitHubRepoConfig = { value: () => 'testrepo' }
-    const theAppServer = await createAppServer({
-        runtimeImportPath: runtimeImportPathParam,
-        localFilePath,
-        gitHubUserConfig,
-        gitHubRepoConfig,
-        moduleCache,
-        gitHubServer
-    })
-    const server = theAppServer.listen(7655)
+    const theAppServer = await createAppServer({runtimeImportPath: runtimeImportPathParam, localFilePath, moduleCache})
+    const server = theAppServer.listen(serverPort)
+    return {serverPort, server}
+}
+
+async function makeAdminServer(localFilePath: string, moduleCache: ModuleCache & { modules: any }) {
+    const serverPort = 7656
+    const theAdminServer = await createAdminServer({localFilePath, moduleCache})
+    const server = theAdminServer.listen(serverPort)
     return {serverPort, server}
 }
 
@@ -84,192 +63,58 @@ test('app Server', async (t) => {
 
     let localFilePath: string
     let moduleCache = createModuleCache()
+    let testVersion = 'abcd1234'
     let server: Server | undefined, serverPort: number | undefined
+    let adminServer: Server | undefined, adminServerPort: number | undefined
 
     t.beforeEach( async () => {
         localFilePath = await newModuleImportDir()
         moduleCache = createModuleCache()
-        server = undefined
-        serverPort = undefined
+        await moduleCache.store(`${testVersion}/server/ServerApp1.mjs`, Buffer.from(serverAppCode));
+        ({server, serverPort} = await makeAppServer(localFilePath, moduleCache))
     })
 
-    await t.test('app server runs server app on latest version from mock GitHub and caches module', async () => {
-        const {gitHubRequests, gitHubMockServer} = await mockGitHub(serverAppCode);
-        ({server, serverPort} = await makeAppServer(localFilePath, 'testuser', 'testrepo', moduleCache, gitHubServer))
+    const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
+    const stopAdminServer = async () => adminServer && await new Promise(resolve => adminServer!.close(resolve as () => void))
+
+    await t.test('app server runs server app on given version and caches module', async () => {
 
         try {
-            expect(await fetchJson(`http://localhost:${serverPort}/capi/ServerApp1/Plus?a=37&b=5`)).toBe(42)
-            expect(await fetchJson(`http://localhost:${serverPort}/capi/ServerApp1/Plus?a=99&b=1`)).toBe(100)
-            expect(gitHubRequests).toStrictEqual(['/testuser/testrepo/main/dist/server/ServerApp1.mjs'])
-            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/main/dist/server/ServerApp1.mjs`].toString()).toBe(serverAppCode)
+            expect(await fetchJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1/Plus?a=37&b=5`)).toBe(42)
+            expect(await fetchJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1/Plus?a=99&b=1`)).toBe(100)
             expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).not.toBe(undefined)
         } finally {
-            gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
-            server && await new Promise(resolve => server!.close(resolve as () => void))
+            await stopServer()
         }
     })
 
     await t.test('app server runs server app and returns error messages', async () => {
-        const {gitHubRequests, gitHubMockServer} = await mockGitHub(serverAppCode);
-        ({server, serverPort} = await makeAppServer(localFilePath, 'testuser', 'testrepo', moduleCache, gitHubServer))
-
         try {
-            expect(await fetchJson(`http://localhost:${serverPort}/capi/ServerApp1`)).toStrictEqual({error: {status: 404, message: 'Not Found'}})
-            expect(await fetchJson(`http://localhost:${serverPort}/capi/ServerApp1/BadFunction`)).toStrictEqual({error: {status: 404, message: 'Not Found: BadFunction'}})
-            expect(await fetchJson(`http://localhost:${serverPort}/capi/ServerApp1/BlowUp?c=1&d=2`)).toStrictEqual({error: {status: 500, message: 'Boom!'}})
-            expect(gitHubRequests).toStrictEqual(['/testuser/testrepo/main/dist/server/ServerApp1.mjs'])
-            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/main/dist/server/ServerApp1.mjs`].toString()).toBe(serverAppCode)
+            expect(await fetchJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1`)).toStrictEqual({error: {status: 404, message: 'Not Found'}})
+            expect(await fetchJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1/BadFunction`)).toStrictEqual({error: {status: 404, message: 'Not Found: BadFunction'}})
+            expect(await fetchJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1/BlowUp?c=1&d=2`)).toStrictEqual({error: {status: 500, message: 'Boom!'}})
         } finally {
-            gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
-            server && await new Promise(resolve => server!.close(resolve as () => void))
-        }
-    })
-
-    const testIndexHtml = async (requestedVersion = '', githubVersion = 'main') => {
-        const {gitHubRequests, gitHubMockServer} = await mockGitHub(indexHtml);
-        ({server, serverPort} = await makeAppServer(localFilePath, 'testuser', 'testrepo', moduleCache, gitHubServer))
-        const requestedVersionSegment = requestedVersion ? requestedVersion + '/' : ''
-
-        try {
-            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/index.html`)).toStrictEqual([indexHtml, 'text/html; charset=utf-8'])
-            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp`)).toStrictEqual([indexHtml, 'text/html; charset=utf-8'])
-            expect(await fetchText(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/`)).toStrictEqual([indexHtml, 'text/html; charset=utf-8'])
-            expect(gitHubRequests).toStrictEqual([`/testuser/testrepo/${githubVersion}/dist/client/NewApp/index.html`])
-            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/${githubVersion}/dist/client/NewApp/index.html`].toString()).toBe(indexHtml)
-            expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).toBe(undefined)
-        } finally {
-            gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
-            server && await new Promise(resolve => server!.close(resolve as () => void))
-        }
-    }
-    await t.test('app server serves index.html on latest version from mock GitHub and caches module', () => testIndexHtml())
-    await t.test('app server serves index.html on specified version from mock GitHub and caches module', () => testIndexHtml('@xyz123', 'xyz123'))
-
-    let testClientJs = async (requestedVersion = '', githubVersion = 'main') => {
-        const {gitHubRequests, gitHubMockServer} = await mockGitHub(clientApp1Js);
-        ({server, serverPort} = await makeAppServer(localFilePath, 'testuser', 'testrepo', moduleCache, gitHubServer))
-        const requestedVersionSegment = requestedVersion ? requestedVersion + '/' : ''
-
-        try {
-            expect(await fetchJs(`http://localhost:${serverPort}/${requestedVersionSegment}NewApp/clientApp1.js`)).toStrictEqual([clientApp1Js, 'application/javascript; charset=utf-8'])
-            expect(gitHubRequests).toStrictEqual([`/testuser/testrepo/${githubVersion}/dist/client/NewApp/clientApp1.js`])
-            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/${githubVersion}/dist/client/NewApp/clientApp1.js`].toString()).toBe(clientApp1Js)
-            expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).toBe(undefined)
-        } finally {
-            gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
-            server && await new Promise(resolve => server!.close(resolve as () => void))
-        }
-    }
-    await t.test('app server serves client js on latest version from mock GitHub and caches module', () => testClientJs())
-    await t.test('app server serves client js on specified version from mock GitHub and caches module', () => testClientJs('@xyz123', 'xyz123'))
-
-    let testClientFiles = async (requestedVersion = '', githubVersion = 'main') => {
-        const {gitHubRequests, gitHubMockServer} = await mockGitHub(pic1Data);
-        ({server, serverPort} = await makeAppServer(localFilePath, 'testuser', 'testrepo', moduleCache, gitHubServer))
-        const requestedVersionSegment = requestedVersion ? requestedVersion + '/' : ''
-
-        try {
-            const data = await fetchData(`http://localhost:${serverPort}/${requestedVersionSegment}files/Pic1.jpg`)
-            console.log('data', data)
-            expect(data.byteLength).toBe(pic1Data.byteLength)
-            expect(gitHubRequests).toStrictEqual([`/testuser/testrepo/${githubVersion}/dist/client/files/Pic1.jpg`])
-            let cachedData = moduleCache.modules[`${gitHubServer}/testuser/testrepo/${githubVersion}/dist/client/files/Pic1.jpg`]
-            expect(cachedData.byteLength).toStrictEqual(pic1Data.byteLength)
-            expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).toBe(undefined)
-        } finally {
-            gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
-            server && await new Promise(resolve => server!.close(resolve as () => void))
-        }
-    }
-    await t.test('app server serves client files on latest version from mock GitHub and caches content', () => testClientFiles())
-    await t.test('app server serves client files on specified version from mock GitHub and caches module content', () => testClientFiles('@xyz123', 'xyz123'))
-
-    await t.test('app server runs server app on specified version from mock GitHub and caches module', async () => {
-        const {gitHubRequests, gitHubMockServer} = await mockGitHub(serverAppCode);
-        ({server, serverPort} = await makeAppServer(localFilePath, 'testuser', 'testrepo', moduleCache, gitHubServer))
-
-        try {
-            expect(await fetchJson(`http://localhost:${serverPort}/@aabb1122/capi/ServerApp1/Plus?a=37&b=5`)).toBe(42)
-            expect(await fetchJson(`http://localhost:${serverPort}/@aabb1122/capi/ServerApp1/Plus?a=99&b=1`)).toBe(100)
-            expect(gitHubRequests).toStrictEqual(['/testuser/testrepo/aabb1122/dist/server/ServerApp1.mjs'])
-            expect(moduleCache.modules[`${gitHubServer}/testuser/testrepo/aabb1122/dist/server/ServerApp1.mjs`].toString()).toBe(serverAppCode)
-            expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).not.toBe(undefined)
-        } finally {
-            gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
-            server && await new Promise(resolve => server!.close(resolve as () => void))
-        }
-    })
-
-    await t.test('app server runs server app from GitHub', async () => {
-        let server: Server | undefined = undefined
-        try {
-            const gitHubUserConfig = { value: () => 'rileydog16' }
-            const gitHubRepoConfig = { value: () => 'rabbits-4' }
-            const moduleCache = createModuleCache()
-
-            const theAppServer = await createAppServer({runtimeImportPath: runtimeImportPathParam, localFilePath, gitHubUserConfig, gitHubRepoConfig, moduleCache, gitHubServer: GITHUB_RAW})
-            server = theAppServer.listen(7656)
-
-            expect(await fetchJson(`http://localhost:7656/capi/ServerApp1/AddTen?abc=5`)).toBe(15)
-        } finally {
-            server && await new Promise(resolve => server!.close(resolve as () => void))
-        }
-    })
-
-    await t.test('app server runs server app on specified version from GitHub', async () => {
-        let server: Server | undefined = undefined
-        try {
-            const gitHubUserConfig = { value: () => 'rileydog16' }
-            const gitHubRepoConfig = { value: () => 'rabbits-4' }
-            const moduleCache = createModuleCache()
-
-            const theAppServer = await createAppServer({runtimeImportPath: runtimeImportPathParam, localFilePath, gitHubUserConfig, gitHubRepoConfig, moduleCache, gitHubServer: GITHUB_RAW})
-            server = theAppServer.listen(7660)
-
-            expect(await fetchJson(`http://localhost:7660/@test-version/capi/ServerApp1/AddTwenty?abc=5`)).toBe(25)
-        } finally {
-            server && await new Promise(resolve => server!.close(resolve as () => void))
-        }
-    })
-
-    await t.test('app server runs server app from private repo in GitHub', async () => {
-        const gitHubAccessToken = await fs.promises.readFile('private/githubRabbits5RepoToken_finegrained.txt', 'utf8') as string
-        let server: Server | undefined = undefined
-        try {
-            const gitHubUserConfig = { value: () => 'rileydog16' }
-            const gitHubRepoConfig = { value: () => 'rabbits-5' }
-            const gitHubAccessTokenConfig = { value: () => gitHubAccessToken }
-            const moduleCache = createModuleCache()
-
-            const theAppServer = await createAppServer({runtimeImportPath: runtimeImportPathParam, localFilePath,
-                gitHubUserConfig, gitHubRepoConfig, gitHubAccessTokenConfig, moduleCache, gitHubServer: GITHUB_RAW})
-            server = theAppServer.listen(7657)
-
-            expect(await fetchJson(`http://localhost:7657/capi/ServerApp1/AddTen?abc=5`)).toBe(15)
-        } finally {
-            server && await new Promise(resolve => server!.close(resolve as () => void))
+            await stopServer()
         }
     })
 
     await t.test('app server stores and uses preview code from editor', async () => {
-        const {gitHubMockServer} = await mockGitHub(serverAppCode);
-        ({server, serverPort} = await makeAppServer(localFilePath, 'testuser', 'testrepo', moduleCache, gitHubServer))
-
+        ({server: adminServer, serverPort: adminServerPort} = await makeAdminServer(localFilePath, moduleCache))
+        const serverAppWithTotalFunction = serverAppCode.replace('//Totalcomment', '')
         try {
-            await fetch(`http://localhost:${serverPort}/preview/ServerApp1.mjs`, {
+            await fetch(`http://localhost:${adminServerPort}/preview/server/ServerApp1.mjs`, {
                 method: 'PUT',
                 headers: {
                     "Content-Type": "text/plain",
                 },
-                body: serverAppCode})
+                body: serverAppWithTotalFunction})
 
-            expect(await fetchJson(`http://localhost:${serverPort}/@preview/capi/ServerApp1/Plus?a=37&b=5`)).toBe(42)
-            expect(await fetchJson(`http://localhost:${serverPort}/@preview/capi/ServerApp1/Plus?a=99&b=1`)).toBe(100)
-            expect(moduleCache.modules[`/preview/ServerApp1.mjs`].toString()).toBe(serverAppCode)
+            expect(await fetchJson(`http://localhost:${serverPort}/capi/preview/ServerApp1/Total?x=2&y=3&z=4`)).toBe(9)
+            expect(moduleCache.modules[`/preview/server/ServerApp1.mjs`].toString()).toBe(serverAppWithTotalFunction)
             expect(moduleCache.modules[`${runtimeImportPath}/serverRuntime.cjs`]).not.toBe(undefined)
         } finally {
-            gitHubMockServer && await new Promise(resolve => gitHubMockServer.close(resolve as () => void))
-            server && await new Promise(resolve => server!.close(resolve as () => void))
+            await stopServer()
+            await stopAdminServer()
         }
     })
 })
@@ -309,7 +154,7 @@ async function BlowUp(c, d) {
 }
 
 async function Total(x, y, z) {
-    return await Mult(y, await Plus(x, z))
+    return //Totalcomment await Plus(y, await Plus(x, z))
 }
 
 async function HideMe(where) {
@@ -324,9 +169,3 @@ return {
 }
 
 export default ServerApp1`
-
-const indexHtml = '<body>index.html</body>'
-
-const clientApp1Js = 'function client1() {}'
-
-const pic1Data = new Uint8Array([1, 2, 3])

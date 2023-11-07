@@ -5,9 +5,11 @@ import {gzipSync} from 'fflate'
 
 import fs from 'fs'
 import crypto from 'crypto'
+import {ModuleCache} from './util'
+import path from 'path'
 
 
-
+const ASSET_DIR = 'files'
 const rootUrl = `https://firebasehosting.googleapis.com/v1beta1`
 
 async function hostingRequest(path: string, accessToken: string, method: string = 'GET', data?: object) {
@@ -39,7 +41,6 @@ async function uploadFile(uploadUrl: string, filePath: string, hash: string, dat
         const {message} = (resp as any).result.error
         throw new Error(`Error deploying to Firebase Hosting: ${message}`)
     }
-
 }
 
 async function hashData(data: BufferSource) {
@@ -70,10 +71,11 @@ const getLatestCommitId = async (dir: string) => {
     return commits[0].oid
 }
 
+const allFilePaths = (dir: string) => fs.promises.readdir(dir, {recursive: true, withFileTypes: true})
+    .then(files => files.filter(f => f.isFile()).map(f => `${f.path}/${f.name}`))
 const files =  async (dir: string): Promise<{[path: string] : {filePath: string, hash: string, gzip: Uint8Array}}> => {
-    const files = await fs.promises.readdir(dir, {recursive: true, withFileTypes: true})
-        .then( files => files.filter( f => f.isFile() ).map( f => `${f.path}/${f.name}` ) )
-    console.log('files to deploy', files)
+    const filePaths = await allFilePaths(dir)
+    console.log('files to deploy', filePaths)
     const hashAndZip = async (fullFilePath: string) => {
         const fileBuffer = await fs.promises.readFile(fullFilePath)
         const fileData = new Uint8Array(fileBuffer)
@@ -83,14 +85,39 @@ const files =  async (dir: string): Promise<{[path: string] : {filePath: string,
         return {filePath, gzip, hash}
     }
 
-    const fileEntryPromises = files.map(hashAndZip)
+    const fileEntryPromises = filePaths.map(hashAndZip)
     const fullFileEntries = await Promise.all(fileEntryPromises)
     return Object.fromEntries(fullFileEntries.map( f => [f.filePath, f]))
 }
 
-export async function deployToHosting({username, repo, firebaseProject, checkoutPath, firebaseAccessToken, gitHubAccessToken}:
+const exists = (path: string) => fs.promises.stat(path).then( ()=> true, ()=> false)
+
+async function deployServerFiles({username, repo, commitId, deployTime, checkoutPath, moduleCache}:
+                                     {username: string, repo: string, commitId: string, deployTime: string, checkoutPath: string, moduleCache: ModuleCache}) {
+    const versionInfo = JSON.stringify({username, repo, commitId, deployTime})
+    await moduleCache.store(path.join(commitId, 'versionInfo'), Buffer.from(versionInfo, 'utf8'))
+
+    const distPath = `${checkoutPath}/dist`
+    const serverDirPath = `${distPath}/server`
+    if (!(await exists(serverDirPath))) {
+        return false
+    }
+    const serverFilePaths = await allFilePaths(serverDirPath)
+    const storeFile = async (filePath: string) => {
+        const fileBuffer = await fs.promises.readFile(filePath)
+        const relativeFilePath = filePath.replace(distPath, '')
+        const pathInCache = path.join(commitId, relativeFilePath)
+        console.log('Storing in cache', pathInCache)
+        return moduleCache.store(pathInCache, fileBuffer)
+    }
+
+    await Promise.all(serverFilePaths.map(storeFile))
+    return true
+}
+
+export async function deployToHosting({username, repo, firebaseProject, checkoutPath, firebaseAccessToken, gitHubAccessToken, moduleCache}:
                                           {username: string, repo: string, firebaseProject: string, checkoutPath: string,
-                                              firebaseAccessToken: string, gitHubAccessToken: string}) {
+                                              firebaseAccessToken: string, gitHubAccessToken: string, moduleCache: ModuleCache}) {
 
     const {sites} = await hostingRequest(`projects/${firebaseProject}/sites`, firebaseAccessToken)
     console.log('sites', sites)
@@ -103,16 +130,15 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
     await cloneRepo(username, repo, gitHubAccessToken, checkoutPath)
     console.log('checked out files', await fs.promises.readdir(checkoutPath))
 
-    const metadata = {
-        deployTime: new Date().toISOString(),
-        commitId: await getLatestCommitId(checkoutPath)
-    }
-    const deployPath = `${checkoutPath}/dist/client`
-    await fs.promises.writeFile(`${deployPath}/version`, JSON.stringify(metadata, null, 2), 'utf8')
-    const filesToDeploy = await files(deployPath)
-    console.log('files to deploy', Object.keys(filesToDeploy))
+    const commitId = (await getLatestCommitId(checkoutPath)).substring(0, 12)
+    const deployTime = new Date().toISOString()
+    const versionData = {deployTime, commitId}
+    const clientDirPath = `${checkoutPath}/dist/client`
+    await fs.promises.writeFile(`${clientDirPath}/version`, JSON.stringify(versionData, null, 2), 'utf8')
+    const hostingFiles = await files(clientDirPath)
+    console.log('files to deploy to hosting', Object.keys(hostingFiles))
 
-    const filesToPopulate = Object.fromEntries(Object.entries(filesToDeploy).map( ([path, {hash}]) => [path, hash]))
+    const filesToPopulate = Object.fromEntries(Object.entries(hostingFiles).map( ([path, {hash}]) => [path, hash]))
     const populateFilesResult = await hostingRequest(`${version.name}:populateFiles`, firebaseAccessToken, 'POST', {files: filesToPopulate})
     console.log('populateFilesResult', populateFilesResult)
 
@@ -120,7 +146,7 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
     console.log('uploadUrl', uploadUrl, 'hashes', uploadRequiredHashes)
 
     const uploadPromises = uploadRequiredHashes.map( async (hash: string) => {
-        const file = Object.values(filesToDeploy).find(f => f.hash === hash)
+        const file = Object.values(hostingFiles).find(f => f.hash === hash)
         const {filePath, gzip} = file!
         try {
             await uploadFile(uploadUrl, filePath, hash, gzip, firebaseAccessToken)
@@ -133,17 +159,19 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
 
     await Promise.all(uploadPromises)
 
-    // const serverAppName = this.serverApp?.codeName?.toLowerCase()
-    const serverAppRewrites = /*serverAppName ? [{
-        glob: `/${serverAppName}/!**`,
-        run: {serviceId: 'serverapp1', region: 'europe-west2'}}
-    ] :*/ [] as any
-    const spaRewrite = {glob: '**', path: '/index.html'}
+    await deployServerFiles({username, repo, checkoutPath, commitId, deployTime, moduleCache})
+
+    const serverAppRewrites = [
+        // {glob: `/capi/**`, run: {serviceId: 'serverapp1', region: 'europe-west2'}}
+    ] as any[]
+    const appDirs = await fs.promises.readdir(clientDirPath, {withFileTypes: true})
+        .then( files => files.filter( f => f.isDirectory() && f.name !== ASSET_DIR).map( f => f.name ) )
+    const spaRewrites = appDirs.map( dir =>  ({glob: `/${dir}/**`, path: `/${dir}/index.html`}))
     const patchResult = await hostingRequest(`${version.name}?update_mask=status,config`, firebaseAccessToken, 'PATCH',
         {
             status: 'FINALIZED',
             config: {
-                rewrites: [...serverAppRewrites, spaRewrite,]
+                rewrites: [...serverAppRewrites, ...spaRewrites,]
             }
         })
 

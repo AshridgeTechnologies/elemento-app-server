@@ -73,6 +73,10 @@ export async function getFromCache(cachePath: string, localPath: string, cache: 
     }
 }
 
+export function cachePath(username: string, repo: string, commitId: string, filePath: string) {
+    return [username, repo, commitId, filePath.replace(/^\//, '')].join('/')
+}
+
 export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: Buffer) {
     await Promise.all([
         mkdirWriteFile(localPath, contents),
@@ -103,6 +107,6 @@ export class CloudStorageCache implements ModuleCache {
     }
 
     private cachePath(path: string) {
-        return 'moduleCache' + '/' + path.replace(/^https?:\/\//, '')
+        return 'deployCache' + '/' + path.replace(/^https?:\/\//, '')
     }
 }

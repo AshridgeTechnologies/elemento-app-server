@@ -4,5 +4,9 @@
   "dependencies": {
     "firebase-tools": "^12.2.1"
   },
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^20.8.10",
+    "ts-lib": "^0.0.5"
+  }
 }
