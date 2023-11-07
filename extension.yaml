@@ -62,30 +62,6 @@ resources:
 # Learn more in the docs:
 # https://firebase.google.com/docs/extensions/reference/extension-yaml#params-field
 params:
-  - param: GITHUB_USER
-    label: GitHub username
-    description: >-
-      the GitHub username for the repository where the Elemento app is located
-    type: string
-    required: true
-    immutable: false
-
-  - param: GITHUB_REPO
-    label: GitHub repo
-    description: >-
-      the name of the repository where the Elemento app is located
-    type: string
-    required: true
-    immutable: false
-
-  - param: GITHUB_ACCESS_TOKEN
-    label: GitHub access token
-    description: >-
-      Optional access token with read permissions on the repository where the Elemento app is located
-    type: string  # should be secret but does not work yet
-    required: false
-    immutable: false
-
   - param: X_RUNTIME_IMPORT_PATH
     label: runtime import path
     description: >-

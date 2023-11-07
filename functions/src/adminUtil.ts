@@ -5,7 +5,7 @@ import {gzipSync} from 'fflate'
 
 import fs from 'fs'
 import crypto from 'crypto'
-import {ModuleCache} from './util'
+import {ModuleCache} from './util.js'
 import path from 'path'
 
 

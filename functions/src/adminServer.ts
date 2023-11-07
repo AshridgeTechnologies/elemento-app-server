@@ -2,7 +2,7 @@ import {Request} from 'express'
 import {expressAdminApp} from './expressUtils.js'
 import path from 'path'
 import {deployToHosting} from './adminUtil.js'
-import {clearCache, ModuleCache, putIntoCacheAndFile} from './util'
+import {clearCache, ModuleCache, putIntoCacheAndFile} from './util.js'
 
 const checkData = (value: string | undefined, name: string) => {
     if (!value) {
