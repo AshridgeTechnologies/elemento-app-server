@@ -62,10 +62,3 @@ resources:
 # Learn more in the docs:
 # https://firebase.google.com/docs/extensions/reference/extension-yaml#params-field
 params:
-  - param: X_RUNTIME_IMPORT_PATH
-    label: runtime import path
-    description: >-
-      Test Only - override standard runtime import path
-    type: string
-    required: false
-    immutable: false

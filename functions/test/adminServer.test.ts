@@ -136,8 +136,10 @@ test('admin Server', async (t) => {
             await moduleCache.downloadToFile(`${commitId}/server/ServerApp1.mjs`, tempFilePath)
             const fileContents = await fs.promises.readFile(tempFilePath, 'utf8')
             expect(fileContents).toContain('AddTen')
-            // const apiResult = await fetch(`https://${firebaseProject}.web.app/capi/${commitId}/ServerApp1/AddTen?a=20`).then(resp => resp.json() )
-            // expect(apiResult).toBe(30)
+            await expect(moduleCache.exists(`${commitId}/server/serverRuntime.cjs`)).resolves.toBe(true)
+
+            const apiResult = await fetch(`https://${firebaseProject}.web.app/capi/${commitId}/ServerApp1/AddTen?a=20`).then(resp => resp.json() )
+            expect(apiResult).toBe(30)
         } finally {
             server && await new Promise(resolve => server!.close(resolve as () => void))
         }

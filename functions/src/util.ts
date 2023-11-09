@@ -37,44 +37,16 @@ export interface ModuleCache {
     clear(): Promise<void>
 }
 
-async function downloadFile(url: string, accessToken: string | undefined): Promise<Buffer> {
-    console.log('Downloading', url)
-    const responseType = 'arraybuffer' as ResponseType
-    const headers = accessToken ? {headers: { Authorization: `Bearer ${accessToken}`}} : {}
-    const options = {responseType, ...headers}
-    const resp = await axios.get(url, options)
-    if (resp.status !== 200) {
-        throw new Error(resp.status + ' ' + resp.statusText)
-    }
-    return await resp.data
-}
-
-export async function downloadModule(url: string, localPath: string, cache: ModuleCache, accessToken?: string) {
-    const alreadyDownloaded = await fileExists(localPath)
-    if (!alreadyDownloaded) {
-        console.log('Fetching from cache', url)
-        const foundInCache = await cache.downloadToFile(url, localPath)
-        if (!foundInCache) {
-            const moduleContents = await downloadFile(url, accessToken)
-            await cache.store(url, moduleContents)
-            await mkdirWriteFile(localPath, moduleContents)
-        }
-    }
-}
-
 export async function getFromCache(cachePath: string, localPath: string, cache: ModuleCache) {
     const alreadyDownloaded = await fileExists(localPath)
     if (!alreadyDownloaded) {
         console.log('Fetching from cache', cachePath)
+        await fs.promises.mkdir(path.dirname(localPath), {recursive: true})
         const foundInCache = await cache.downloadToFile(cachePath, localPath)
         if (!foundInCache) {
             throw new Error('File not found in cache: ' + cachePath)
         }
     }
-}
-
-export function cachePath(username: string, repo: string, commitId: string, filePath: string) {
-    return [username, repo, commitId, filePath.replace(/^\//, '')].join('/')
 }
 
 export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: Buffer) {
@@ -93,19 +65,33 @@ export class CloudStorageCache implements ModuleCache {
     }
 
     downloadToFile(path: string, localFilePath: string): Promise<boolean> {
-        return getStorage().bucket(this.bucketName).file(this.cachePath(path)).download({destination: localFilePath}).then( () => true, () => false )
+        return this.file(path).download({destination: localFilePath})
+            .then( () => true, (e: any) => {
+                console.log('downloadToFile', e)
+                return false
+            })
+    }
+
+    exists(path: string) : Promise<boolean> {
+        return this.file(path).exists().then( ([result]) => result)
     }
 
     store(path: string, contents: Buffer): Promise<void> {
-        return getStorage().bucket(this.bucketName).file(this.cachePath(path)).save(contents)
+        return this.file(path).save(contents)
     }
 
     async clear(): Promise<void> {
-        let bucket = getStorage().bucket(this.bucketName)
-        const [cacheFiles] = await bucket.getFiles({prefix: this.cachePath('')})
-        await Promise.all(cacheFiles.map( f => bucket.file(f.name).delete()))
+        const [cacheFiles] = await this.bucket().getFiles({prefix: this.cachePath('')})
+        await Promise.all(cacheFiles.map( f => this.bucket().file(f.name).delete()))
     }
 
+    private bucket() {
+        return getStorage().bucket(this.bucketName)
+    }
+
+    private file(path: string) {
+        return this.bucket().file(this.cachePath(path))
+    }
     private cachePath(path: string) {
         return 'deployCache' + '/' + path.replace(/^https?:\/\//, '')
     }

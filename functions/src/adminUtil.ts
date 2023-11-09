@@ -8,9 +8,9 @@ import crypto from 'crypto'
 import {ModuleCache} from './util.js'
 import path from 'path'
 
-
 const ASSET_DIR = 'files'
 const rootUrl = `https://firebasehosting.googleapis.com/v1beta1`
+const runtimeImportPath = 'https://elemento.online/lib'
 
 async function hostingRequest(path: string, accessToken: string, method: string = 'GET', data?: object) {
     const url = `${rootUrl}/${path}`
@@ -103,15 +103,24 @@ async function deployServerFiles({username, repo, commitId, deployTime, checkout
         return false
     }
     const serverFilePaths = await allFilePaths(serverDirPath)
+
+    const storeInCache = async (pathInCache: string, fileBuffer: Buffer) => {
+        console.log('Storing in cache', pathInCache)
+        await moduleCache.store(pathInCache, fileBuffer)
+    }
+
     const storeFile = async (filePath: string) => {
         const fileBuffer = await fs.promises.readFile(filePath)
         const relativeFilePath = filePath.replace(distPath, '')
-        const pathInCache = path.join(commitId, relativeFilePath)
-        console.log('Storing in cache', pathInCache)
-        return moduleCache.store(pathInCache, fileBuffer)
+        await storeInCache(`${commitId}${relativeFilePath}`, fileBuffer)
     }
 
-    await Promise.all(serverFilePaths.map(storeFile))
+    const storeRuntime = async () => {
+        const fileBuffer: Buffer = await axios.get(`${runtimeImportPath}/serverRuntime.cjs`, {responseType: 'arraybuffer'}).then( resp => resp.data )
+        await storeInCache(`${commitId}/server/serverRuntime.cjs`, fileBuffer)
+    }
+
+    await Promise.all([storeRuntime(), ...serverFilePaths.map(storeFile)])
     return true
 }
 
@@ -131,8 +140,11 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
     console.log('checked out files', await fs.promises.readdir(checkoutPath))
 
     const commitId = (await getLatestCommitId(checkoutPath)).substring(0, 12)
+
     const deployTime = new Date().toISOString()
     const versionData = {deployTime, commitId}
+    console.log('commit id', commitId, 'deployTime', deployTime)
+
     const clientDirPath = `${checkoutPath}/dist/client`
     await fs.promises.writeFile(`${clientDirPath}/version`, JSON.stringify(versionData, null, 2), 'utf8')
     const hostingFiles = await files(clientDirPath)
@@ -162,16 +174,22 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
     await deployServerFiles({username, repo, checkoutPath, commitId, deployTime, moduleCache})
 
     const serverAppRewrites = [
-        // {glob: `/capi/**`, run: {serviceId: 'serverapp1', region: 'europe-west2'}}
+        {
+            functionRegion: 'europe-west2',
+            glob: '/capi/**',
+            function: 'ext-elemento-app-server-appServer'
+        }
     ] as any[]
     const appDirs = await fs.promises.readdir(clientDirPath, {withFileTypes: true})
         .then( files => files.filter( f => f.isDirectory() && f.name !== ASSET_DIR).map( f => f.name ) )
     const spaRewrites = appDirs.map( dir =>  ({glob: `/${dir}/**`, path: `/${dir}/index.html`}))
+    const rewrites = [...serverAppRewrites, ...spaRewrites,]
+    console.log('rewrites', JSON.stringify(rewrites))
     const patchResult = await hostingRequest(`${version.name}?update_mask=status,config`, firebaseAccessToken, 'PATCH',
         {
             status: 'FINALIZED',
             config: {
-                rewrites: [...serverAppRewrites, ...spaRewrites,]
+                rewrites
             }
         })
 
