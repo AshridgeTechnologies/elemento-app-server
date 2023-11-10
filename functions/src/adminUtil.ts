@@ -9,21 +9,25 @@ import {ModuleCache} from './util.js'
 import path from 'path'
 
 const ASSET_DIR = 'files'
-const rootUrl = `https://firebasehosting.googleapis.com/v1beta1`
+const firebaseRootUrl = `https://firebase.googleapis.com/v1beta1`
+const hostingRootUrl = `https://firebasehosting.googleapis.com/v1beta1`
 const runtimeImportPath = 'https://elemento.online/lib'
 
-async function hostingRequest(path: string, accessToken: string, method: string = 'GET', data?: object) {
-    const url = `${rootUrl}/${path}`
+async function googleApiRequest(host: string, path: string, accessToken: string, method?: string, data?: object) {
+    const url = `${host}/${path}`
     const responseType = 'json' as ResponseType
     const headers = accessToken ? {headers: {Authorization: `Bearer ${accessToken}`}} : {}
     const options = {url, method, responseType, data, ...headers}
     const resp = await axios.request(options)
     if (resp.status !== 200) {
         const {message} = (resp as any).result.error
-        throw new Error(`Error deploying to Firebase Hosting: ${message}`)
+        throw new Error(`Error deploying to Firebase: ${message}`)
     }
     return await resp.data
 }
+
+const hostingRequest = (path: string, accessToken: string, method: string = 'GET', data?: object) => googleApiRequest(hostingRootUrl, path, accessToken, method, data)
+const firebaseRequest = (path: string, accessToken: string, method: string = 'GET', data?: object) => googleApiRequest(firebaseRootUrl, path, accessToken, method, data)
 
 async function uploadFile(uploadUrl: string, filePath: string, hash: string, data: BufferSource, accessToken: string) {
     const options = {
@@ -124,12 +128,43 @@ async function deployServerFiles({username, repo, commitId, deployTime, checkout
     return true
 }
 
+const wait = (time: number): Promise<void> => new Promise(resolve => setTimeout(resolve, time))
+
+async function getFirebaseConfig(firebaseProject: string, firebaseAccessToken: string) {
+    let {apps} = await firebaseRequest(`projects/${firebaseProject}/webApps`, firebaseAccessToken)
+    let app
+    if (apps?.length > 0) {
+        app = apps[0]
+    } else {
+        const {name: operationName} = await firebaseRequest(`projects/${firebaseProject}/webApps`, firebaseAccessToken, 'POST')
+        let operation = {done: false} as any
+        let tries = 0, maxTries = 10
+        while (!operation.done && ++tries <= maxTries) {
+            await wait(750)
+            operation = await firebaseRequest(`operations/${operationName}`, firebaseAccessToken)
+        }
+        if (tries > maxTries) {
+            throw new Error("Timed out creating web app")
+        }
+        if (operation.error) {
+            throw new Error(operation.error)
+        }
+
+        app = operation.response
+    }
+
+    let config = await firebaseRequest(`projects/${firebaseProject}/webApps/${app.appId}/config`, firebaseAccessToken)
+    return config
+}
+
 export async function deployToHosting({username, repo, firebaseProject, checkoutPath, firebaseAccessToken, gitHubAccessToken, moduleCache}:
                                           {username: string, repo: string, firebaseProject: string, checkoutPath: string,
                                               firebaseAccessToken: string, gitHubAccessToken: string, moduleCache: ModuleCache}) {
 
     const {sites} = await hostingRequest(`projects/${firebaseProject}/sites`, firebaseAccessToken)
     console.log('sites', sites)
+    const config = await getFirebaseConfig(firebaseProject, firebaseAccessToken)
+    console.log('config', config)
 
     const site = sites.find((s: any) => s.type === 'DEFAULT_SITE')
     const siteName = site.name.match(/[^/]+$/)[0]
@@ -147,6 +182,8 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
 
     const clientDirPath = `${checkoutPath}/dist/client`
     await fs.promises.writeFile(`${clientDirPath}/version`, JSON.stringify(versionData, null, 2), 'utf8')
+    await fs.promises.writeFile(`${clientDirPath}/firebaseConfig.json`, JSON.stringify(config, null, 2), 'utf8')
+
     const hostingFiles = await files(clientDirPath)
     console.log('files to deploy to hosting', Object.keys(hostingFiles))
 

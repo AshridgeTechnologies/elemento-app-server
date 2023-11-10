@@ -87,6 +87,9 @@ test('admin Server', async (t) => {
             const deployTimeMillis = new Date(deployTime).getTime()
             expect(deployTimeMillis - Date.now()).toBeLessThan(5000)
 
+            const firebaseConfig = await fetch(`https://${firebaseProject}.web.app/firebaseConfig.json`).then(resp => resp.json() )
+            expect(firebaseConfig.projectId).toBe(firebaseProject)
+
             const deployDir = `${localFilePath}/deploy`
             const checkoutDir = (await fs.promises.readdir(deployDir))[0]
             const checkoutPath = `${deployDir}/${checkoutDir}`

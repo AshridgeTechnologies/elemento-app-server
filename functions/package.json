@@ -4,8 +4,8 @@
     "build": "tsc",
     "check:test": "tsc test/** --noEmit",
     "build:watch": "tsc --watch",
-    "unitTest": "node --loader ts-node/esm --es-module-specifier-resolution=node --test test/*.test.ts",
-    "integrationTest": "node --loader ts-node/esm --es-module-specifier-resolution=node integration-tests/integration-test.spec.ts",
+    "unitTest": "tsx --test test/*.test.ts",
+    "integrationTest": "node tsx integration-tests/integration-test.spec.ts",
     "test": "(cd integration-tests && firebase emulators:exec 'npm run integrationTest' -P elemento-test)"
   },
   "main": "lib/index.js",
