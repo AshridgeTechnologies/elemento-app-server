@@ -22,3 +22,5 @@ export function getAccessToken(serviceAccountKey: any): Promise<string> {
         });
     });
 }
+
+export const wait = (time: number): Promise<void> => new Promise(resolve => setTimeout(resolve, time))

@@ -7,13 +7,14 @@ import fs from 'fs'
 import crypto from 'crypto'
 import {ModuleCache} from './util.js'
 import path from 'path'
+import {wait} from '../test/testUtil'
 
 const ASSET_DIR = 'files'
 const firebaseRootUrl = `https://firebase.googleapis.com/v1beta1`
 const hostingRootUrl = `https://firebasehosting.googleapis.com/v1beta1`
 const runtimeImportPath = 'https://elemento.online/lib'
 
-async function googleApiRequest(host: string, path: string, accessToken: string, method?: string, data?: object) {
+export async function googleApiRequest(host: string, path: string, accessToken: string, method?: string, data?: object) {
     const url = `${host}/${path}`
     const responseType = 'json' as ResponseType
     const headers = accessToken ? {headers: {Authorization: `Bearer ${accessToken}`}} : {}
@@ -77,6 +78,7 @@ const getLatestCommitId = async (dir: string) => {
 
 const allFilePaths = (dir: string) => fs.promises.readdir(dir, {recursive: true, withFileTypes: true})
     .then(files => files.filter(f => f.isFile()).map(f => `${f.path}/${f.name}`))
+
 const files =  async (dir: string): Promise<{[path: string] : {filePath: string, hash: string, gzip: Uint8Array}}> => {
     const filePaths = await allFilePaths(dir)
     console.log('files to deploy', filePaths)
@@ -128,8 +130,6 @@ async function deployServerFiles({username, repo, commitId, deployTime, checkout
     return true
 }
 
-const wait = (time: number): Promise<void> => new Promise(resolve => setTimeout(resolve, time))
-
 async function getFirebaseConfig(firebaseProject: string, firebaseAccessToken: string) {
     let {apps} = await firebaseRequest(`projects/${firebaseProject}/webApps`, firebaseAccessToken)
     let app
@@ -141,7 +141,7 @@ async function getFirebaseConfig(firebaseProject: string, firebaseAccessToken: s
         let tries = 0, maxTries = 10
         while (!operation.done && ++tries <= maxTries) {
             await wait(750)
-            operation = await firebaseRequest(`operations/${operationName}`, firebaseAccessToken)
+            operation = await firebaseRequest(operationName, firebaseAccessToken)
         }
         if (tries > maxTries) {
             throw new Error("Timed out creating web app")

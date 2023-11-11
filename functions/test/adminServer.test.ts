@@ -5,10 +5,11 @@ import {type Server} from 'http'
 import * as fs from 'fs'
 import {CloudStorageCache, type ModuleCache} from '../src/util'
 import createAdminServer from '../src/adminServer'
-import {getAccessToken} from './testUtil'
+import {getAccessToken, wait} from './testUtil'
 import git from 'isomorphic-git'
 // @ts-ignore
 import admin from 'firebase-admin'
+import {googleApiRequest} from '../src/adminUtil'
 
 let dirSeq = 0
 async function newTestDir() {
@@ -39,6 +40,19 @@ const serviceAccountKeyPath = 'private/elemento-hosting-test-firebase-adminsdk-7
 const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
 admin.initializeApp({credential: admin.credential.cert(serviceAccountKey), storageBucket: bucketName})
 
+async function clearWebApps(firebaseAccessToken: string) {
+    const getApps = async () => {
+        const response = await googleApiRequest(`https://firebase.googleapis.com/v1beta1`, `projects/${firebaseProject}/webApps`, firebaseAccessToken)
+        return response.apps ?? []
+    }
+    for (const app of (await getApps())) {
+        await googleApiRequest(`https://firebase.googleapis.com/v1beta1`, `projects/${firebaseProject}/webApps/${app.appId}:remove`, firebaseAccessToken,
+            'POST', {immediate: true})
+    }
+    await expect(getApps()).resolves.toHaveLength(0)
+    await wait(2000)
+}
+
 test('admin Server', async (t) => {
 
     let localFilePath: string
@@ -56,6 +70,8 @@ test('admin Server', async (t) => {
         const gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1-2RepoToken_finegrained.txt', 'utf8')
         const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
         const firebaseAccessToken = await getAccessToken(serviceAccountKey)
+
+        await clearWebApps(firebaseAccessToken)
 
         const requestData = {
             firebaseProject,
