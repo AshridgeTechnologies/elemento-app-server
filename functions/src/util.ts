@@ -1,10 +1,11 @@
 import fs from 'fs'
-import axios, {type ResponseType} from 'axios'
 import {parseISO} from 'date-fns'
 import {getStorage} from 'firebase-admin/storage'
 import path from 'path'
 
-const fileExists = (filePath: string): Promise<boolean> => fs.promises.access(filePath).then(() => true, () => false)
+export const runtimeImportPath = 'https://elemento.online/lib'
+
+export const fileExists = (filePath: string): Promise<boolean> => fs.promises.access(filePath).then(() => true, () => false)
 
 const mkdirWriteFile = (localPath: string, contents: Buffer) =>
         fs.promises.mkdir(path.dirname(localPath), {recursive: true})
@@ -32,7 +33,7 @@ export const parseParam = (param: string) => {
 }
 
 export interface ModuleCache {
-    downloadToFile(path: string, localFilePath: string): Promise<boolean>
+    downloadToFile(path: string, localFilePath: string, logError?: boolean): Promise<boolean>
     store(path: string, contents: Buffer): Promise<void>
     clear(): Promise<void>
 }
@@ -42,7 +43,7 @@ export async function getFromCache(cachePath: string, localPath: string, cache: 
     if (!alreadyDownloaded) {
         console.log('Fetching from cache', cachePath)
         await fs.promises.mkdir(path.dirname(localPath), {recursive: true})
-        const foundInCache = await cache.downloadToFile(cachePath, localPath)
+        const foundInCache = await cache.downloadToFile(cachePath, localPath, true)
         if (!foundInCache) {
             throw new Error('File not found in cache: ' + cachePath)
         }
@@ -60,14 +61,15 @@ export function clearCache(localPath: string, cache: ModuleCache) {
     return Promise.all([rmdir(localPath), cache.clear()])
 }
 
+
 export class CloudStorageCache implements ModuleCache {
     constructor(private readonly bucketName?: string) {
     }
 
-    downloadToFile(path: string, localFilePath: string): Promise<boolean> {
+    downloadToFile(path: string, localFilePath: string, logError = false): Promise<boolean> {
         return this.file(path).download({destination: localFilePath})
             .then( () => true, (e: any) => {
-                console.log('downloadToFile', e)
+                if (logError) console.error('downloadToFile', e)
                 return false
             })
     }
@@ -80,8 +82,8 @@ export class CloudStorageCache implements ModuleCache {
         return this.file(path).save(contents)
     }
 
-    async clear(): Promise<void> {
-        const [cacheFiles] = await this.bucket().getFiles({prefix: this.cachePath('')})
+    async clear(prefix: string = ''): Promise<void> {
+        const [cacheFiles] = await this.bucket().getFiles({prefix: this.cachePath(prefix)})
         await Promise.all(cacheFiles.map( f => this.bucket().file(f.name).delete()))
     }
 

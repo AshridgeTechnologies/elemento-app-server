@@ -5,13 +5,13 @@ import * as os from 'os'
 import {type Server} from 'http'
 import * as fs from 'fs'
 import {type ModuleCache} from '../src/util'
-import createAdminServer from '../src/adminServer'
 import axios from 'axios'
+import {serverAppCode} from './testUtil'
 
 const runtimeImportPath = 'http://127.0.0.1:8000/lib'
 const createModuleCache = (): ModuleCache & {modules:any} => ({
     modules: {},
-    downloadToFile(cachePath: string, localPath: string): Promise<boolean> {
+    downloadToFile(cachePath: string, localPath: string, logError = false): Promise<boolean> {
         if (this.modules[cachePath]) {
             return fs.promises.writeFile(localPath, this.modules[cachePath]).then( () => true )
         }
@@ -25,7 +25,6 @@ const createModuleCache = (): ModuleCache & {modules:any} => ({
         this.modules = {}
         return Promise.resolve()
     }
-
 })
 
 let dirSeq = 0
@@ -46,22 +45,15 @@ async function makeAppServer(localFilePath: string, moduleCache: ModuleCache & {
     const server = theAppServer.listen(serverPort)
     return {serverPort, server}
 }
-
-async function makeAdminServer(localFilePath: string, moduleCache: ModuleCache & { modules: any }) {
-    const serverPort = 7656
-    const theAdminServer = await createAdminServer({localFilePath, moduleCache})
-    const server = theAdminServer.listen(serverPort)
-    return {serverPort, server}
-}
-
 test('app Server', async (t) => {
 
     let localFilePath: string
     let moduleCache = createModuleCache()
     let testVersion = 'abcd1234'
     let server: Server | undefined, serverPort: number | undefined
-    let adminServer: Server | undefined, adminServerPort: number | undefined
     const serverRuntimeBuffer: Buffer = await axios.get(`${runtimeImportPath}/serverRuntime.cjs`, {responseType: 'arraybuffer'}).then( resp => resp.data )
+
+    const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
 
     t.beforeEach( async () => {
         localFilePath = await newModuleImportDir()
@@ -70,9 +62,6 @@ test('app Server', async (t) => {
         await moduleCache.store(`${testVersion}/server/serverRuntime.cjs`, serverRuntimeBuffer);
         ({server, serverPort} = await makeAppServer(localFilePath, moduleCache))
     })
-
-    const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
-    const stopAdminServer = async () => adminServer && await new Promise(resolve => adminServer!.close(resolve as () => void))
 
     await t.test('app server runs server app on given version from cached module', async () => {
 
@@ -94,73 +83,15 @@ test('app Server', async (t) => {
         }
     })
 
-    await t.test('app server stores and uses preview code from editor', async () => {
-        ({server: adminServer, serverPort: adminServerPort} = await makeAdminServer(localFilePath, moduleCache))
+    await t.test('app server runs preview server app', async () => {
         const serverAppWithTotalFunction = serverAppCode.replace('//Totalcomment', '')
-        try {
-            await fetch(`http://localhost:${adminServerPort}/preview/server/ServerApp1.mjs`, {
-                method: 'PUT',
-                headers: {
-                    "Content-Type": "text/plain",
-                },
-                body: serverAppWithTotalFunction})
+        await moduleCache.store(`preview/server/ServerApp1.mjs`, Buffer.from(serverAppWithTotalFunction));
+        await moduleCache.store(`preview/server/serverRuntime.cjs`, serverRuntimeBuffer);
 
+        try {
             expect(await fetchJson(`http://localhost:${serverPort}/capi/preview/ServerApp1/Total?x=2&y=3&z=4`)).toBe(9)
-            expect(moduleCache.modules[`/preview/server/ServerApp1.mjs`].toString()).toBe(serverAppWithTotalFunction)
         } finally {
             await stopServer()
-            await stopAdminServer()
         }
     })
 })
-
-const serverAppCode = `import serverRuntime from './serverRuntime.cjs'
-const {globalFunctions} = serverRuntime
-const {types} = serverRuntime
-
-const {Sum} = globalFunctions
-const {ChoiceType, DateType, ListType, NumberType, RecordType, TextType, TrueFalseType, Rule} = types
-
-// Types1.js
-const Name = new TextType('Name', {required: true, maxLength: 20})
-
-const Types1 = {
-    Name
-}
-
-// Types2.js
-const ItemAmount = new NumberType('Item Amount', {required: false, max: 10})
-
-const Types2 = {
-    ItemAmount
-}
-
-
-const ServerApp1 = (user) => {
-
-function CurrentUser() { return runtimeFunctions.asCurrentUser(user) }
-
-async function Plus(a, b) {
-    return Sum(a, b)
-}
-
-async function BlowUp(c, d) {
-    throw new Error('Boom!')
-}
-
-async function Total(x, y, z) {
-    return //Totalcomment await Plus(y, await Plus(x, z))
-}
-
-async function HideMe(where) {
-    return where + ' - there'
-}
-
-return {
-    Plus: {func: Plus, update: false, argNames: ['a', 'b']},
-    BlowUp: {func: BlowUp, update: false, argNames: ['c', 'd']},
-    Total: {func: Total, update: false, argNames: ['x', 'y', 'z']}
-}
-}
-
-export default ServerApp1`

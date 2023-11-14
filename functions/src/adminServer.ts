@@ -41,7 +41,7 @@ const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, 
         try {
             const elementoFilesPath = path.join(localFilePath, 'serverFiles')
             const appModulePath = path.join(elementoFilesPath, req.url)
-            const cachePath = req.url
+            const cachePath = req.url.substring(1)
             const moduleContents = req.body as Buffer
             await putIntoCacheAndFile(cachePath, appModulePath, moduleCache, moduleContents)
             res.end()

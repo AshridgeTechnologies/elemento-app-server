@@ -7,7 +7,7 @@ type AppServerProperties = {
     localFilePath: string,
     moduleCache: ModuleCache,
 }
-function createAppFactory({localFilePath, moduleCache}: AppServerProperties): AppFactory {
+export function createAppFactory({localFilePath, moduleCache}: AppServerProperties): AppFactory {
     const elementoFilesPath = path.join(localFilePath, 'serverFiles')
     fs.mkdirSync(elementoFilesPath, {recursive: true})
     console.log('Storing files in', elementoFilesPath)

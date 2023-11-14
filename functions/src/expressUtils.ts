@@ -94,3 +94,18 @@ export function expressAdminApp(deployHandler: RequestHandler, putHandler: Reque
     app.use(errorHandler)
     return app
 }
+
+export function expressPreviewApp(appFactory: AppFactory, putHandler: RequestHandler) {
+    const app = express()
+    app.use(function (req, res, next) {
+        console.log(req.method, req.url)
+        next()
+    })
+
+    app.use(['/capi'], express.json())
+    app.use('/preview', express.raw({type: '*/*'}))
+    app.use(['/capi'], requestHandler(appFactory))
+    app.put('/preview/*', putHandler)
+    app.use(errorHandler)
+    return app
+}

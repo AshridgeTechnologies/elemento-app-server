@@ -32,15 +32,22 @@ test('app Server', async (t) => {
     })
 
     await t.test('CloudStorageCache clears files', async () => {
-        const fileUrl = `https://raw.githubusercontent.com/theUser/theRepo/theFile.${Date.now()}.js`
+        const fileUrl1 = `dir1/theFile.${Date.now()}.js`
+        const fileUrl2 = `dir2/theFile.${Date.now()}.js`
         const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.2'
         await fs.promises.rm(downloadDir, {force: true, recursive: true})
         await fs.promises.mkdir(downloadDir)
         const downloadFilePath = downloadDir + '/' + 'retrievedFile.txt'
 
         const cache = new CloudStorageCache()
-        await cache.store(fileUrl, fileContentBuf)
-        await cache.clear()
-        await expect(cache.downloadToFile(fileUrl, downloadFilePath)).resolves.toBe(false)
+        await cache.store(fileUrl1, fileContentBuf)
+        await cache.store(fileUrl2, fileContentBuf)
+
+        await cache.clear('dir1')
+        await expect(cache.downloadToFile(fileUrl1, downloadFilePath)).resolves.toBe(false)
+        await expect(cache.downloadToFile(fileUrl2, downloadFilePath)).resolves.toBe(true)
+
+        await cache.clear('dir2')
+        await expect(cache.downloadToFile(fileUrl2, downloadFilePath)).resolves.toBe(false)
     })
 })

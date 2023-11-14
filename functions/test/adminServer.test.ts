@@ -1,22 +1,14 @@
 import {test} from 'node:test'
 import {expect} from 'expect'
-import * as os from 'os'
 import {type Server} from 'http'
 import * as fs from 'fs'
 import {CloudStorageCache, type ModuleCache} from '../src/util'
 import createAdminServer from '../src/adminServer'
-import {getAccessToken, wait} from './testUtil'
+import {getAccessToken, newTestDir, serverAppCode, wait} from './testUtil'
 import git from 'isomorphic-git'
 // @ts-ignore
 import admin from 'firebase-admin'
 import {googleApiRequest} from '../src/adminUtil'
-
-let dirSeq = 0
-async function newTestDir() {
-    const localFilePath = `${os.tmpdir()}/adminServer.test.${++dirSeq}`
-    await fs.promises.rm(localFilePath, {force: true, recursive: true}).then(() => fs.promises.mkdir(localFilePath, {recursive: true}))
-    return localFilePath
-}
 
 const getLatestCommitId = async (dir: string) => {
     const commits = await git.log({
@@ -57,32 +49,35 @@ test('admin Server', async (t) => {
 
     let localFilePath: string
     let moduleCache = new CloudStorageCache()
+    let gitHubAccessToken: string, serviceAccountKey: string, firebaseAccessToken: string, headers: HeadersInit
 
     let server: Server | undefined, serverPort: number | undefined
+    const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
+
+    const requestData = {
+        firebaseProject,
+        username: 'rileydog16',
+        repo: 'Elemento-Test-2'
+    }
 
     t.beforeEach(async () => {
         localFilePath = await newTestDir();
-        ({server, serverPort} = await makeAdminServer(localFilePath, moduleCache))
-    })
-
-    await t.test('deploys client-only project from GitHub', async () => {
-
-        const gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1-2RepoToken_finegrained.txt', 'utf8')
-        const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
-        const firebaseAccessToken = await getAccessToken(serviceAccountKey)
-
-        await clearWebApps(firebaseAccessToken)
-
-        const requestData = {
-            firebaseProject,
-            username: 'rileydog16',
-            repo: 'Elemento-Test-1'
-        }
-        const headers = {
+        gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1-2RepoToken_finegrained.txt', 'utf8')
+        serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
+        firebaseAccessToken = await getAccessToken(serviceAccountKey);
+        headers = ({
             'Content-Type': 'application/json',
             'x-firebase-access-token': firebaseAccessToken,
             'X-GitHub-Access-Token': gitHubAccessToken,
-        }
+        });
+        ({server, serverPort} = await makeAdminServer(localFilePath, moduleCache))
+    })
+
+    t.afterEach(stopServer)
+
+    await t.test('deploys client-only project from GitHub', { skip: false }, async () => {
+
+        await clearWebApps(firebaseAccessToken)
 
         const deployUrl = `http://localhost:${serverPort}/deploy`
         try {
@@ -112,25 +107,11 @@ test('admin Server', async (t) => {
             const commitId = await getLatestCommitId(checkoutPath)
             expect(versionInfo.commitId).toBe(commitId)
         } finally {
-            server && await new Promise(resolve => server!.close(resolve as () => void))
+            await stopServer()
         }
     })
 
-    await t.test('deploys project with server app from GitHub', async () => {
-        const gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1-2RepoToken_finegrained.txt', 'utf8')
-        const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
-        const firebaseAccessToken = await getAccessToken(serviceAccountKey)
-
-        const requestData = {
-            firebaseProject,
-            username: 'rileydog16',
-            repo: 'Elemento-Test-2'
-        }
-        const headers = {
-            'Content-Type': 'application/json',
-            'x-firebase-access-token': firebaseAccessToken,
-            'X-GitHub-Access-Token': gitHubAccessToken,
-        }
+    await t.test('deploys project with server app from GitHub', { skip: false }, async () => {
 
         const deployUrl = `http://localhost:${serverPort}/deploy`
         try {
@@ -160,7 +141,33 @@ test('admin Server', async (t) => {
             const apiResult = await fetch(`https://${firebaseProject}.web.app/capi/${commitId}/ServerApp1/AddTen?a=20`).then(resp => resp.json() )
             expect(apiResult).toBe(30)
         } finally {
-            server && await new Promise(resolve => server!.close(resolve as () => void))
+            await stopServer()
+        }
+    })
+
+    await t.test('deploys server app preview', async () => {
+
+        const previewHeaders = {
+            'Content-Type': 'text/plain',
+            'x-firebase-access-token': firebaseAccessToken,
+        }
+        const previewUrl = `http://localhost:${serverPort}/preview/server/ServerApp1.mjs`
+        const deployTime = Date.now()
+        const serverAppWithTotalFunction = serverAppCode.replace('//Totalcomment', '').replace( '// time', '// time ' + deployTime)
+        try {
+            await fetch(previewUrl, {method: 'PUT', headers: previewHeaders, body: serverAppWithTotalFunction})
+
+            console.log('Preview deployed')
+            const tempFilePath = `${localFilePath}/temp1`
+            await moduleCache.downloadToFile(`preview/server/ServerApp1.mjs`, tempFilePath)
+            const fileContents = await fs.promises.readFile(tempFilePath, 'utf8')
+            expect(fileContents).toBe(serverAppWithTotalFunction)
+            await expect(moduleCache.exists(`preview/server/serverRuntime.cjs`)).resolves.toBe(true)
+
+            const apiResult = await fetch(`https://${firebaseProject}.web.app/capi/preview/ServerApp1/AddTen?a=20`).then(resp => resp.json() )
+            expect(apiResult).toBe(30)
+        } finally {
+            await stopServer()
         }
     })
 })

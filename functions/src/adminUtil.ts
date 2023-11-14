@@ -5,14 +5,13 @@ import {gzipSync} from 'fflate'
 
 import fs from 'fs'
 import crypto from 'crypto'
-import {ModuleCache} from './util.js'
+import {ModuleCache, runtimeImportPath} from './util.js'
 import path from 'path'
 import {wait} from '../test/testUtil'
 
 const ASSET_DIR = 'files'
 const firebaseRootUrl = `https://firebase.googleapis.com/v1beta1`
 const hostingRootUrl = `https://firebasehosting.googleapis.com/v1beta1`
-const runtimeImportPath = 'https://elemento.online/lib'
 
 export async function googleApiRequest(host: string, path: string, accessToken: string, method?: string, data?: object) {
     const url = `${host}/${path}`
@@ -97,6 +96,16 @@ const files =  async (dir: string): Promise<{[path: string] : {filePath: string,
 }
 
 const exists = (path: string) => fs.promises.stat(path).then( ()=> true, ()=> false)
+
+const storeInCache = async (moduleCache: ModuleCache, pathInCache: string, fileBuffer: Buffer) => {
+    console.log('Storing in cache', pathInCache)
+    await moduleCache.store(pathInCache, fileBuffer)
+}
+
+const storeRuntime = async (moduleCache: ModuleCache, version: string) => {
+    const fileBuffer: Buffer = await axios.get(`${runtimeImportPath}/serverRuntime.cjs`, {responseType: 'arraybuffer'}).then( resp => resp.data )
+    await storeInCache(moduleCache, `${version}/server/serverRuntime.cjs`, fileBuffer)
+}
 
 async function deployServerFiles({username, repo, commitId, deployTime, checkoutPath, moduleCache}:
                                      {username: string, repo: string, commitId: string, deployTime: string, checkoutPath: string, moduleCache: ModuleCache}) {
