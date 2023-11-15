@@ -5,7 +5,7 @@ import {AppServerProperties} from './appServer'
 import fs from 'fs'
 import axios from 'axios'
 
-const lastUpdateTimes: {[appName: string]: number} = {}
+const appModuleCache: {[appName: string]: Function | null} = {}
 
 async function downloadToCacheAndFile(url: string, localPath: string, cachePath: string, moduleCache: ModuleCache) {
     const response = await axios.get(url, {responseType: 'arraybuffer'})
@@ -45,27 +45,31 @@ function createPreviewAppFactory({localFilePath, moduleCache}: AppServerProperti
 
     async function loadAppModule(appModuleCode: string, runtimePath: string) {
         const functionBody = appModuleCode
-            .replace(/^import serverRuntime .*/, `return import('${runtimePath}').then( serverRuntime => {`)
-            .replace(/export default *(\w+)/, 'return {default: $1}') + '\n})'
-        console.log('functionBody', functionBody)
-        const appModuleGeneratorFn = new Function(functionBody)
-        return await appModuleGeneratorFn()
+            .replace(/^import serverRuntime .*/, '// $&')
+            .replace(/export default *(\w+)/, 'return {default: $1}')
+        const appModuleGeneratorFn = new Function('serverRuntime', functionBody)
+        const serverRuntime = await import(runtimePath)
+        return await appModuleGeneratorFn(serverRuntime)
     }
 
-    async function getApp(appName: string, version: string) {
-        const runtimeName = 'serverRuntime.cjs'
-        const appFileName = `${appName}.mjs`
-        const appModuleDir = path.join(elementoFilesPath, version, 'server')
-        const appModulePath = path.join(appModuleDir, appFileName)
-        const runtimePath = path.join(appModuleDir, runtimeName)
-        const runtimeDownload = getFromCache(`${version}/server/${runtimeName}`, runtimePath, moduleCache)
-        const moduleDownload = getFromCache(`${version}/server/${appFileName}`, appModulePath, moduleCache)
+    async function getApp(appName: string, version: string): Promise<Function> {
+        if (!appModuleCache[appName]) {
+            const runtimeName = 'serverRuntime.cjs'
+            const appFileName = `${appName}.mjs`
+            const appModuleDir = path.join(elementoFilesPath, version, 'server')
+            const appModulePath = path.join(appModuleDir, appFileName)
+            const runtimePath = path.join(appModuleDir, runtimeName)
+            const runtimeDownload = getFromCache(`${version}/server/${runtimeName}`, runtimePath, moduleCache)
+            const moduleDownload = getFromCache(`${version}/server/${appFileName}`, appModulePath, moduleCache)
 
-        await Promise.all([runtimeDownload, moduleDownload])
+            await Promise.all([runtimeDownload, moduleDownload])
 
-        const appModuleCode = await fs.promises.readFile(appModulePath, 'utf8')
-        const serverAppModule = await loadAppModule(appModuleCode, runtimePath)
-        return serverAppModule.default
+            const appModuleCode = await fs.promises.readFile(appModulePath, 'utf8')
+            const serverAppModule = await loadAppModule(appModuleCode, runtimePath)
+            appModuleCache[appName] = serverAppModule.default
+        }
+
+        return appModuleCache[appName]!
     }
 
     return async (appName, user, version) => {
@@ -86,6 +90,10 @@ const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, 
             const cachePath = req.url.substring(1)
             const moduleContents = req.body as Buffer
             await putIntoCacheAndFile(cachePath, appModulePath, moduleCache, moduleContents)
+            const [, appName] = req.url.match(/\/(\w+)\.[mc]?js$/) || []
+            if (appName) {
+                appModuleCache[appName] = null
+            }
             await updateServerRuntime(serverRuntimeUrl, serverRuntimePath, serverRuntimeLocalPath, moduleCache)
             res.end()
         } catch (err) {

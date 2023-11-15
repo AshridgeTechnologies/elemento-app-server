@@ -69,10 +69,7 @@ async function Total(x, y, z) {
 }
 
 async function Difference(x, y) {
-    const result =  Sub(x, y)
-    console.log('Difference result', result)
-    debugger
-    return //Differencecomment result
+    return //Differencecomment Sub(x, y)
 }
 
 async function HideMe(where) {
