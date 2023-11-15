@@ -2,6 +2,7 @@ import fs from 'fs'
 import {parseISO} from 'date-fns'
 import {getStorage} from 'firebase-admin/storage'
 import path from 'path'
+import axios, {HttpStatusCode} from 'axios'
 
 export const runtimeImportPath = 'https://elemento.online/lib'
 
@@ -34,8 +35,9 @@ export const parseParam = (param: string) => {
 
 export interface ModuleCache {
     downloadToFile(path: string, localFilePath: string, logError?: boolean): Promise<boolean>
-    store(path: string, contents: Buffer): Promise<void>
+    store(path: string, contents: Buffer, etag?: string): Promise<void>
     clear(): Promise<void>
+    etag(path: string): Promise<string | undefined>
 }
 
 export async function getFromCache(cachePath: string, localPath: string, cache: ModuleCache) {
@@ -78,8 +80,19 @@ export class CloudStorageCache implements ModuleCache {
         return this.file(path).exists().then( ([result]) => result)
     }
 
-    store(path: string, contents: Buffer): Promise<void> {
-        return this.file(path).save(contents)
+    async etag(path: string): Promise<string | undefined> {
+        const exists = await this.exists(path)
+        if (!exists) return undefined
+        const [response] = await this.file(path).getMetadata()
+        return response.metadata?.sourceEtag
+    }
+
+    async store(path: string, contents: Buffer, etag?: string): Promise<void> {
+        const file = this.file(path)
+        await file.save(contents)
+        if (etag) {
+            await file.setMetadata({metadata: {sourceEtag: etag}})
+        }
     }
 
     async clear(prefix: string = ''): Promise<void> {
@@ -90,11 +103,19 @@ export class CloudStorageCache implements ModuleCache {
     private bucket() {
         return getStorage().bucket(this.bucketName)
     }
-
     private file(path: string) {
         return this.bucket().file(this.cachePath(path))
     }
+
     private cachePath(path: string) {
         return 'deployCache' + '/' + path.replace(/^https?:\/\//, '')
     }
+}
+
+export const isCacheObjectSourceModified = async (url: string, cachePath: string, cache: ModuleCache) => {
+    const etag = await cache.etag(cachePath)
+    return axios.head(url, {
+        headers: {'If-None-Match': etag},
+        validateStatus: status => status <= 304
+    }).then( resp => resp.status !== HttpStatusCode.NotModified)
 }

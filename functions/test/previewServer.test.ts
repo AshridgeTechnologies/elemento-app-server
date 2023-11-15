@@ -2,7 +2,7 @@ import {test} from 'node:test'
 import {expect} from 'expect'
 import {type Server} from 'http'
 import * as fs from 'fs'
-import {CloudStorageCache, type ModuleCache} from '../src/util'
+import {CloudStorageCache, isCacheObjectSourceModified, type ModuleCache, runtimeImportPath} from '../src/util'
 import {getAccessToken, newTestDir, serverAppCode} from './testUtil'
 // @ts-ignore
 import admin from 'firebase-admin'
@@ -45,7 +45,7 @@ test('preview Server', async (t) => {
     t.afterEach(stopServer)
 
 
-    await t.test('deploys server app preview and serves result', async () => {
+    await t.test('deploys server app preview and updates it and serves result', async () => {
 
         const previewHeaders = {
             'Content-Type': 'text/plain',
@@ -64,9 +64,20 @@ test('preview Server', async (t) => {
             const fileContents = await fs.promises.readFile(tempFilePath, 'utf8')
             expect(fileContents).toBe(serverAppWithTotalFunction)
             await expect(moduleCache.exists(`preview/server/serverRuntime.cjs`)).resolves.toBe(true)
+            await expect(isCacheObjectSourceModified(`${runtimeImportPath}/serverRuntime.cjs`, 'preview/server/serverRuntime.cjs', moduleCache)).resolves.toBe(false)
+            // different source url, so expect modified
+            await expect(isCacheObjectSourceModified(`${runtimeImportPath}/runtime.js`, 'preview/server/serverRuntime.cjs', moduleCache)).resolves.toBe(true)
+            // file with no etag, so expect modified
+            await expect(isCacheObjectSourceModified(`${runtimeImportPath}/serverRuntime.cjs`, 'preview/server/ServerApp1.mjs', moduleCache)).resolves.toBe(true)
 
             const apiResult = await fetch(`${getPreviewUrl}/ServerApp1/Total?x=20&y=30&z=40`).then(resp => resp.json() )
             expect(apiResult).toBe(90)
+
+            const serverAppWithDifference = serverAppCode.replace('//Differencecomment', '').replace( '// time', '// time ' + deployTime)
+            await fetch(putPreviewUrl, {method: 'PUT', headers: previewHeaders, body: serverAppWithDifference})
+            const resp = await fetch(`${getPreviewUrl}/ServerApp1/Difference?x=20&y=30`)
+            const differenceResult = await resp.json()
+            expect(differenceResult).toBe(-10)
         } finally {
             await stopServer()
         }

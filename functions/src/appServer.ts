@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import {getFromCache, ModuleCache} from './util.js'
 
-type AppServerProperties = {
+export type AppServerProperties = {
     localFilePath: string,
     moduleCache: ModuleCache,
 }

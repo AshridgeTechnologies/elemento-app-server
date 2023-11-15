@@ -11,20 +11,21 @@ import {serverAppCode} from './testUtil'
 const runtimeImportPath = 'http://127.0.0.1:8000/lib'
 const createModuleCache = (): ModuleCache & {modules:any} => ({
     modules: {},
-    downloadToFile(cachePath: string, localPath: string, logError = false): Promise<boolean> {
+    downloadToFile(cachePath: string, localPath: string, _ = false): Promise<boolean> {
         if (this.modules[cachePath]) {
             return fs.promises.writeFile(localPath, this.modules[cachePath]).then( () => true )
         }
         return Promise.resolve(false)
     },
-    store(path: string, contents: Buffer): Promise<void> {
+    store(path: string, contents: Buffer, _?: string): Promise<void> {
         this.modules[path] = contents
         return Promise.resolve()
     },
     clear() {
         this.modules = {}
         return Promise.resolve()
-    }
+    },
+    etag(_: string) { return undefined }
 })
 
 let dirSeq = 0
@@ -78,18 +79,6 @@ test('app Server', async (t) => {
             expect(await fetchJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1`)).toStrictEqual({error: {status: 404, message: 'Not Found'}})
             expect(await fetchJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1/BadFunction`)).toStrictEqual({error: {status: 404, message: 'Not Found: BadFunction'}})
             expect(await fetchJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1/BlowUp?c=1&d=2`)).toStrictEqual({error: {status: 500, message: 'Boom!'}})
-        } finally {
-            await stopServer()
-        }
-    })
-
-    await t.test('app server runs preview server app', async () => {
-        const serverAppWithTotalFunction = serverAppCode.replace('//Totalcomment', '')
-        await moduleCache.store(`preview/server/ServerApp1.mjs`, Buffer.from(serverAppWithTotalFunction));
-        await moduleCache.store(`preview/server/serverRuntime.cjs`, serverRuntimeBuffer);
-
-        try {
-            expect(await fetchJson(`http://localhost:${serverPort}/capi/preview/ServerApp1/Total?x=2&y=3&z=4`)).toBe(9)
         } finally {
             await stopServer()
         }

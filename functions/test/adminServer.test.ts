@@ -145,29 +145,4 @@ test('admin Server', async (t) => {
         }
     })
 
-    await t.test('deploys server app preview', async () => {
-
-        const previewHeaders = {
-            'Content-Type': 'text/plain',
-            'x-firebase-access-token': firebaseAccessToken,
-        }
-        const previewUrl = `http://localhost:${serverPort}/preview/server/ServerApp1.mjs`
-        const deployTime = Date.now()
-        const serverAppWithTotalFunction = serverAppCode.replace('//Totalcomment', '').replace( '// time', '// time ' + deployTime)
-        try {
-            await fetch(previewUrl, {method: 'PUT', headers: previewHeaders, body: serverAppWithTotalFunction})
-
-            console.log('Preview deployed')
-            const tempFilePath = `${localFilePath}/temp1`
-            await moduleCache.downloadToFile(`preview/server/ServerApp1.mjs`, tempFilePath)
-            const fileContents = await fs.promises.readFile(tempFilePath, 'utf8')
-            expect(fileContents).toBe(serverAppWithTotalFunction)
-            await expect(moduleCache.exists(`preview/server/serverRuntime.cjs`)).resolves.toBe(true)
-
-            const apiResult = await fetch(`https://${firebaseProject}.web.app/capi/preview/ServerApp1/AddTen?a=20`).then(resp => resp.json() )
-            expect(apiResult).toBe(30)
-        } finally {
-            await stopServer()
-        }
-    })
 })

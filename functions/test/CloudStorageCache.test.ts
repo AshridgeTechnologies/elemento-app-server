@@ -6,6 +6,7 @@ import * as os from 'os'
 import * as fs from 'fs'
 // @ts-ignore
 import admin from 'firebase-admin'
+import {clearDirectory} from './testUtil'
 
 const fileContent = 'some code'
 const fileContentBuf = Buffer.from(fileContent, 'utf8')
@@ -17,10 +18,9 @@ admin.initializeApp({credential: admin.credential.cert(serviceAccount), storageB
 
 test('app Server', async (t) => {
     await t.test('CloudStorageCache saves and retrieves files with URL as key', async () => {
-        const fileUrl = `https://raw.githubusercontent.com/theUser/theRepo/theFile.${Date.now()}.js`
+        const fileUrl = `dir1/theFile.${Date.now()}.js`
         const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.1'
-        await fs.promises.rm(downloadDir, {force: true, recursive: true})
-        await fs.promises.mkdir(downloadDir)
+        await clearDirectory(downloadDir)
         const downloadFilePath = downloadDir + '/' + 'retrievedFile.txt'
 
         const cache = new CloudStorageCache()
@@ -29,12 +29,29 @@ test('app Server', async (t) => {
         await expect(cache.downloadToFile(fileUrl, downloadFilePath)).resolves.toBe(true)
         const retrievedContent = await fs.promises.readFile(downloadFilePath, 'utf8')
         expect(retrievedContent).toBe(fileContent)
+        await expect(cache.etag(fileUrl)).resolves.toBe(undefined)
+    })
+
+    await t.test('CloudStorageCache saves and retrieves etag if file exists and has sourceEtag', async () => {
+        const fileUrl1 = `dir1/theFile.${Date.now()}.js`
+        const fileUrl2 = `dir2/theFile.${Date.now()}.js`
+        const nonExistentFileUrl = `dir3/theFile.${Date.now()}.js`
+        const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.2'
+        await clearDirectory(downloadDir)
+
+        const cache = new CloudStorageCache()
+        const etag = 'etag99'
+        await cache.store(fileUrl1, fileContentBuf)
+        await cache.store(fileUrl2, fileContentBuf, etag)
+        await expect(cache.etag(fileUrl1)).resolves.toBe(undefined)
+        await expect(cache.etag(fileUrl2)).resolves.toBe(etag)
+        await expect(cache.etag(nonExistentFileUrl)).resolves.toBe(undefined)
     })
 
     await t.test('CloudStorageCache clears files', async () => {
         const fileUrl1 = `dir1/theFile.${Date.now()}.js`
         const fileUrl2 = `dir2/theFile.${Date.now()}.js`
-        const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.2'
+        const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.3'
         await fs.promises.rm(downloadDir, {force: true, recursive: true})
         await fs.promises.mkdir(downloadDir)
         const downloadFilePath = downloadDir + '/' + 'retrievedFile.txt'
