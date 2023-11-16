@@ -87,9 +87,7 @@ export function expressAdminApp(deployHandler: RequestHandler, putHandler: Reque
     })
 
     app.use(['/deploy', ], express.json())
-    app.use('/preview', express.raw({type: '*/*'}))
     app.post('/deploy', deployHandler)
-    app.put('/preview/*', putHandler)
     clearHandler && app.post('/clearcache', clearHandler)
     app.use(errorHandler)
     return app

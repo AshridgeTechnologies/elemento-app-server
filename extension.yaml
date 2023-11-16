@@ -17,10 +17,6 @@ license: Apache-2.0  # https://spdx.org/licenses/
 # Public URL for the source code of your extension
 sourceUrl: https://github.com/xxx/xxx/tree/master/templates/extensions
 
-# Specify whether a paid-tier billing plan is required to use your extension.
-# Learn more in the docs: https://firebase.google.com/docs/extensions/reference/extension-yaml#billing-required-field
-billingRequired: false
-
 # In an `apis` field, list any Google APIs (like Cloud Translation, BigQuery, etc.)
 # required for your extension to operate.
 # Learn more in the docs:
@@ -53,6 +49,15 @@ resources:
     type: firebaseextensions.v1beta.function
     description: >-
       HTTP request-triggered function that does admin operations on the site
+    properties:
+      location: "europe-west2"
+      httpsTrigger: {}
+      runtime: "nodejs18"
+
+  - name: previewServer
+    type: firebaseextensions.v1beta.function
+    description: >-
+      HTTP request-triggered function that handles requests to preview versions of an Elemento app
     properties:
       location: "europe-west2"
       httpsTrigger: {}

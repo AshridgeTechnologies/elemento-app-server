@@ -1,7 +1,7 @@
 import {google} from 'googleapis'
 import {Credentials} from 'google-auth-library'
-import os from 'os'
-import fs from 'fs'
+import * as os from 'os'
+import * as fs from 'fs'
 
 export function getAccessToken(serviceAccountKey: any): Promise<string> {
     const SCOPES = [
@@ -28,7 +28,7 @@ export function getAccessToken(serviceAccountKey: any): Promise<string> {
 export const clearDirectory = (path: string) => fs.promises.rm(path, {force: true, recursive: true}).then(() => fs.promises.mkdir(path))
 
 export const wait = (time: number): Promise<void> => new Promise(resolve => setTimeout(resolve, time))
-export const serverAppCode = `import serverRuntime from './serverRuntime.cjs'
+export const serverAppCode = `import * as serverRuntime from './serverRuntime.cjs'
 const {globalFunctions} = serverRuntime
 const {types} = serverRuntime
 

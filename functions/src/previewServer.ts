@@ -45,7 +45,7 @@ function createPreviewAppFactory({localFilePath, moduleCache}: AppServerProperti
 
     async function loadAppModule(appModuleCode: string, runtimePath: string) {
         const functionBody = appModuleCode
-            .replace(/^import serverRuntime .*/, '// $&')
+            .replace(/^import +(\* +as +)?serverRuntime .*/, '// $&')
             .replace(/export default *(\w+)/, 'return {default: $1}')
         const appModuleGeneratorFn = new Function('serverRuntime', functionBody)
         const serverRuntime = await import(runtimePath)

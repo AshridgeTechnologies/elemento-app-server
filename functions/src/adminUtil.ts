@@ -7,11 +7,12 @@ import fs from 'fs'
 import crypto from 'crypto'
 import {ModuleCache, runtimeImportPath} from './util.js'
 import path from 'path'
-import {wait} from '../test/testUtil'
 
 const ASSET_DIR = 'files'
 const firebaseRootUrl = `https://firebase.googleapis.com/v1beta1`
 const hostingRootUrl = `https://firebasehosting.googleapis.com/v1beta1`
+
+export const wait = (time: number): Promise<void> => new Promise(resolve => setTimeout(resolve, time))
 
 export async function googleApiRequest(host: string, path: string, accessToken: string, method?: string, data?: object) {
     const url = `${host}/${path}`

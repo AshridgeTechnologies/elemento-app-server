@@ -25,7 +25,7 @@ test('preview Server', async (t) => {
 
     let localFilePath: string
     let moduleCache = new CloudStorageCache()
-    let serviceAccountKey: string, firebaseAccessToken: string, headers: HeadersInit
+    let serviceAccountKey: string, firebaseAccessToken: string
 
     let server: Server | undefined, serverPort: number | undefined
     const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
@@ -35,10 +35,6 @@ test('preview Server', async (t) => {
         await moduleCache.clear('preview')
         serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
         firebaseAccessToken = await getAccessToken(serviceAccountKey);
-        headers = ({
-            'Content-Type': 'application/json',
-            'x-firebase-access-token': firebaseAccessToken,
-        });
         ({server, serverPort} = await makePreviewServer(localFilePath, moduleCache))
     })
 
