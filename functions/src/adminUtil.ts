@@ -171,6 +171,7 @@ export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepo
                                           {gitRepoUrl: string, firebaseProject: string, checkoutPath: string,
                                               firebaseAccessToken: string, username?: string, gitHubAccessToken: string, moduleCache: ModuleCache}) {
 
+    console.log('Starting deploy to hosting')
     const {sites} = await hostingRequest(`projects/${firebaseProject}/sites`, firebaseAccessToken)
     console.log('sites', sites)
     const config = await getFirebaseConfig(firebaseProject, firebaseAccessToken)

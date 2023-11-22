@@ -15,18 +15,20 @@ const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: strin
         console.log('deploy handler', req.url)
         console.log(process.env)
         try {
-            const {gitRepoUrl, firebaseProject} = req.body
+            const {gitRepoUrl} = req.body
             const firebaseAccessToken = req.get('x-firebase-access-token')
             const gitHubAccessToken = req.get('x-github-access-token')
 
             checkData(gitRepoUrl, 'Git URL')
-            checkData(firebaseProject, 'Firebase Project')
             checkData(gitHubAccessToken, 'GitHub access token')
             checkData(firebaseAccessToken, 'Google access token')
 
+            const firebaseProject: string | undefined = process.env.PROJECT_ID
+            checkData(firebaseProject, 'Firebase Project in PROJECT_ID env variable')
+
             const deployTag = new Date().toISOString().substring(0, 19)
             const checkoutPath = path.join(localFilePath, 'deploy', deployTag)
-            const releaseResult = await deployToHosting({gitRepoUrl, firebaseProject, checkoutPath,
+            const releaseResult = await deployToHosting({gitRepoUrl, firebaseProject: firebaseProject!, checkoutPath,
                 firebaseAccessToken: firebaseAccessToken!, gitHubAccessToken: gitHubAccessToken!, moduleCache})
             res.send(releaseResult)
         } catch (err) {

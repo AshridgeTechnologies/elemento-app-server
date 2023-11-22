@@ -9,6 +9,7 @@ import git from 'isomorphic-git'
 // @ts-ignore
 import admin from 'firebase-admin'
 import {googleApiRequest} from '../src/adminUtil'
+import * as dotenv from 'dotenv'
 
 const getLatestCommitId = async (dir: string) => {
     const commits = await git.log({
@@ -55,11 +56,12 @@ test('admin Server', async (t) => {
     const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
 
     const requestData = {
-        firebaseProject,
         gitRepoUrl: 'https://github.com/rileydog16/Elemento-Test-2'
     }
 
     t.beforeEach(async () => {
+        dotenv.populate(process.env, {PROJECT_ID: firebaseProject})
+        expect(process.env.PROJECT_ID).toBe(firebaseProject)
         localFilePath = await newTestDir();
         gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1-2RepoToken_finegrained.txt', 'utf8')
         serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
