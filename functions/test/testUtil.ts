@@ -2,6 +2,8 @@ import {google} from 'googleapis'
 import {Credentials} from 'google-auth-library'
 import * as os from 'os'
 import * as fs from 'fs'
+import {ModuleCache} from '../src/util'
+import createAdminServer from '../src/adminServer'
 
 export function getAccessToken(serviceAccountKey: any): Promise<string> {
     const SCOPES = [
@@ -91,4 +93,11 @@ export async function newTestDir() {
     const localFilePath = `${os.tmpdir()}/adminServer.test.${++dirSeq}`
     await fs.promises.rm(localFilePath, {force: true, recursive: true}).then(() => fs.promises.mkdir(localFilePath, {recursive: true}))
     return localFilePath
+}
+
+export async function makeAdminServer(localFilePath: string, moduleCache: ModuleCache) {
+    const serverPort = 7655
+    const theAppServer = await createAdminServer({localFilePath, moduleCache})
+    const server = theAppServer.listen(7655)
+    return {serverPort, server}
 }

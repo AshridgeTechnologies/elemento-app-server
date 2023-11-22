@@ -4,7 +4,8 @@ import {getStorage} from 'firebase-admin/storage'
 import path from 'path'
 import axios, {HttpStatusCode} from 'axios'
 
-export const runtimeImportPath = 'https://elemento.online/lib'
+export const elementoHost = 'https://elemento.online'
+export const runtimeImportPath = elementoHost + '/lib'
 
 export const fileExists = (filePath: string): Promise<boolean> => fs.promises.access(filePath).then(() => true, () => false)
 

@@ -2,9 +2,8 @@ import {test} from 'node:test'
 import {expect} from 'expect'
 import {type Server} from 'http'
 import * as fs from 'fs'
-import {CloudStorageCache, type ModuleCache} from '../src/util'
-import createAdminServer from '../src/adminServer'
-import {getAccessToken, newTestDir, serverAppCode, wait} from './testUtil'
+import {CloudStorageCache} from '../src/util'
+import {getAccessToken, makeAdminServer, newTestDir, wait} from './testUtil'
 import git from 'isomorphic-git'
 // @ts-ignore
 import admin from 'firebase-admin'
@@ -18,13 +17,6 @@ const getLatestCommitId = async (dir: string) => {
         depth: 1,
     })
     return commits[0].oid.substring(0, 12)
-}
-
-async function makeAdminServer(localFilePath: string, moduleCache: ModuleCache) {
-    const serverPort = 7655
-    const theAppServer = await createAdminServer({localFilePath, moduleCache})
-    const server = theAppServer.listen(7655)
-    return {serverPort, server}
 }
 
 const firebaseProject = 'elemento-hosting-test'

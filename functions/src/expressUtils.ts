@@ -1,6 +1,7 @@
 import express, {RequestHandler} from 'express'
 import {DecodedIdToken, getAuth} from 'firebase-admin/auth'
-import {parseParam} from './util.js'
+import cors from 'cors'
+import {elementoHost, parseParam} from './util.js'
 
 export type ServerAppHandler = {
     [key: string]: {func: (...args: Array<any>) => any, update: boolean, argNames: string[]}
@@ -85,7 +86,11 @@ export function expressAdminApp(deployHandler: RequestHandler, putHandler: Reque
         console.log(req.method, req.url)
         next()
     })
-
+    app.use(cors({
+        origin: [elementoHost, 'http://localhost:8000'],
+        methods: ['POST'],
+        preflightContinue: false
+    }))
     app.use(['/deploy', ], express.json())
     app.post('/deploy', deployHandler)
     clearHandler && app.post('/clearcache', clearHandler)
