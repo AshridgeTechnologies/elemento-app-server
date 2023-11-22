@@ -25,7 +25,7 @@ test('admin util', async (t) => {
     const moduleCache = new CloudStorageCache()
     await t.test('deploy to hosting', async () => {
         await deployToHosting({
-            username: 'rileydog16', repo: 'Elemento-Test-2',
+            gitRepoUrl: 'https://github.com/rileydog16/Elemento-Test-2',
             firebaseProject,
             checkoutPath, firebaseAccessToken: firebaseAccessToken, gitHubAccessToken, moduleCache})
     })

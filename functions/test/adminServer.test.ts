@@ -56,8 +56,7 @@ test('admin Server', async (t) => {
 
     const requestData = {
         firebaseProject,
-        username: 'rileydog16',
-        repo: 'Elemento-Test-2'
+        gitRepoUrl: 'https://github.com/rileydog16/Elemento-Test-2'
     }
 
     t.beforeEach(async () => {

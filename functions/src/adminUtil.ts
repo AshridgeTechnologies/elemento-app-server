@@ -54,8 +54,7 @@ async function hashData(data: BufferSource) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-const cloneRepo = (username: string, repo: string, accessToken: string, dir: string) => {
-    const url = `https://github.com/${username}/${repo}`
+const cloneRepo = (url: string, username: string | undefined, accessToken: string, dir: string) => {
     return git.clone({
         fs,
         http,
@@ -63,7 +62,7 @@ const cloneRepo = (username: string, repo: string, accessToken: string, dir: str
         url,
         singleBranch: true,
         depth: 1,
-        onAuth: () => ({username: username, password: accessToken}),
+        onAuth: () => ({username, password: accessToken}),
     })
 }
 
@@ -108,9 +107,9 @@ const storeRuntime = async (moduleCache: ModuleCache, version: string) => {
     await storeInCache(moduleCache, `${version}/server/serverRuntime.cjs`, fileBuffer)
 }
 
-async function deployServerFiles({username, repo, commitId, deployTime, checkoutPath, moduleCache}:
-                                     {username: string, repo: string, commitId: string, deployTime: string, checkoutPath: string, moduleCache: ModuleCache}) {
-    const versionInfo = JSON.stringify({username, repo, commitId, deployTime})
+async function deployServerFiles({gitRepoUrl, commitId, deployTime, checkoutPath, moduleCache}:
+                                     {gitRepoUrl: string, commitId: string, deployTime: string, checkoutPath: string, moduleCache: ModuleCache}) {
+    const versionInfo = JSON.stringify({gitRepoUrl, commitId, deployTime})
     await moduleCache.store(path.join(commitId, 'versionInfo'), Buffer.from(versionInfo, 'utf8'))
 
     const distPath = `${checkoutPath}/dist`
@@ -167,9 +166,10 @@ async function getFirebaseConfig(firebaseProject: string, firebaseAccessToken: s
     return config
 }
 
-export async function deployToHosting({username, repo, firebaseProject, checkoutPath, firebaseAccessToken, gitHubAccessToken, moduleCache}:
-                                          {username: string, repo: string, firebaseProject: string, checkoutPath: string,
-                                              firebaseAccessToken: string, gitHubAccessToken: string, moduleCache: ModuleCache}) {
+const usernameOf = (url: string) => new URL(url).pathname.substring(1).split('/')[0]
+export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepoUrl), firebaseProject, checkoutPath, firebaseAccessToken, gitHubAccessToken, moduleCache}:
+                                          {gitRepoUrl: string, firebaseProject: string, checkoutPath: string,
+                                              firebaseAccessToken: string, username?: string, gitHubAccessToken: string, moduleCache: ModuleCache}) {
 
     const {sites} = await hostingRequest(`projects/${firebaseProject}/sites`, firebaseAccessToken)
     console.log('sites', sites)
@@ -181,7 +181,7 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
     const version = await hostingRequest(`sites/${siteName}/versions`, firebaseAccessToken, 'POST')
     console.log('version', version)
 
-    await cloneRepo(username, repo, gitHubAccessToken, checkoutPath)
+    await cloneRepo(gitRepoUrl, username, gitHubAccessToken, checkoutPath)
     console.log('checked out files', await fs.promises.readdir(checkoutPath))
 
     const commitId = (await getLatestCommitId(checkoutPath)).substring(0, 12)
@@ -218,7 +218,7 @@ export async function deployToHosting({username, repo, firebaseProject, checkout
 
     await Promise.all(uploadPromises)
 
-    await deployServerFiles({username, repo, checkoutPath, commitId, deployTime, moduleCache})
+    await deployServerFiles({gitRepoUrl, checkoutPath, commitId, deployTime, moduleCache})
 
     const serverAppRewrites = [
         {
