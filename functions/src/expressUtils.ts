@@ -1,4 +1,4 @@
-import express, {RequestHandler} from 'express'
+import express, {NextFunction, RequestHandler} from 'express'
 import {DecodedIdToken, getAuth} from 'firebase-admin/auth'
 import cors from 'cors'
 import {elementoHost, parseParam} from './util.js'
@@ -68,12 +68,14 @@ export const requestHandler = (appFactory: AppFactory) => async (req: any, res: 
     }
 }
 
-export function expressApp(appFactory: AppFactory) {
-    const app = express()
-    app.use(function (req, res, next) {
+function logCall(req: any, res: any, next: NextFunction) {
         console.log(req.method, req.url)
         next()
-    })
+}
+
+export function expressApp(appFactory: AppFactory) {
+    const app = express()
+    app.use(logCall)
     app.use(['/capi'], express.json())
     app.use(['/capi'], requestHandler(appFactory))
     app.use(errorHandler)
@@ -82,10 +84,7 @@ export function expressApp(appFactory: AppFactory) {
 
 export function expressAdminApp(deployHandler: RequestHandler, putHandler: RequestHandler, clearHandler?: RequestHandler) {
     const app = express()
-    app.use(function (req, res, next) {
-        console.log(req.method, req.url)
-        next()
-    })
+    app.use(logCall)
     app.use(cors({
         origin: [elementoHost, 'http://localhost:8000'],
         methods: ['POST'],
@@ -100,11 +99,12 @@ export function expressAdminApp(deployHandler: RequestHandler, putHandler: Reque
 
 export function expressPreviewApp(appFactory: AppFactory, putHandler: RequestHandler) {
     const app = express()
-    app.use(function (req, res, next) {
-        console.log(req.method, req.url)
-        next()
-    })
-
+    app.use(logCall)
+    app.use(cors({
+        origin: [elementoHost, 'http://localhost:8000'],
+        methods: ['PUT'],
+        preflightContinue: false
+    }))
     app.use(['/capi'], express.json())
     app.use('/preview', express.raw({type: '*/*'}))
     app.use(['/capi'], requestHandler(appFactory))
