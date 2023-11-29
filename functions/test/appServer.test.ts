@@ -17,7 +17,7 @@ const createModuleCache = (): ModuleCache & {modules:any} => ({
         }
         return Promise.resolve(false)
     },
-    store(path: string, contents: Buffer, _?: string): Promise<void> {
+    storeWithEtag(path: string, contents: Buffer, _?: string): Promise<void> {
         this.modules[path] = contents
         return Promise.resolve()
     },
@@ -25,7 +25,11 @@ const createModuleCache = (): ModuleCache & {modules:any} => ({
         this.modules = {}
         return Promise.resolve()
     },
-    etag(_: string) { return undefined }
+    etag(_: string) { return undefined },
+    storeWithPermissions(path: string, contents: Buffer, accessToken: string) {
+        this.modules[path] = contents
+        return Promise.resolve()
+    }
 })
 
 let dirSeq = 0
@@ -59,8 +63,8 @@ test('app Server', async (t) => {
     t.beforeEach( async () => {
         localFilePath = await newModuleImportDir()
         moduleCache = createModuleCache()
-        await moduleCache.store(`${testVersion}/server/ServerApp1.mjs`, Buffer.from(serverAppCode));
-        await moduleCache.store(`${testVersion}/server/serverRuntime.cjs`, serverRuntimeBuffer);
+        await moduleCache.storeWithEtag(`${testVersion}/server/ServerApp1.mjs`, Buffer.from(serverAppCode), 'abc123');
+        await moduleCache.storeWithEtag(`${testVersion}/server/serverRuntime.cjs`, serverRuntimeBuffer, 'abc123');
         ({server, serverPort} = await makeAppServer(localFilePath, moduleCache))
     })
 

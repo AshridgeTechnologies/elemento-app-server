@@ -1,11 +1,11 @@
-import axios, {ResponseType} from 'axios'
+import axios from 'axios'
 import git from 'isomorphic-git'
 import http from 'isomorphic-git/http/node/index.js'
 import {gzipSync} from 'fflate'
 
 import fs from 'fs'
 import crypto from 'crypto'
-import {ModuleCache, runtimeImportPath} from './util.js'
+import {googleApiRequest, ModuleCache, runtimeImportPath} from './util.js'
 import path from 'path'
 
 const ASSET_DIR = 'files'
@@ -13,19 +13,6 @@ const firebaseRootUrl = `https://firebase.googleapis.com/v1beta1`
 const hostingRootUrl = `https://firebasehosting.googleapis.com/v1beta1`
 
 export const wait = (time: number): Promise<void> => new Promise(resolve => setTimeout(resolve, time))
-
-export async function googleApiRequest(host: string, path: string, accessToken: string, method?: string, data?: object) {
-    const url = `${host}/${path}`
-    const responseType = 'json' as ResponseType
-    const headers = accessToken ? {headers: {Authorization: `Bearer ${accessToken}`}} : {}
-    const options = {url, method, responseType, data, ...headers}
-    const resp = await axios.request(options)
-    if (resp.status !== 200) {
-        const {message} = (resp as any).result.error
-        throw new Error(`Error deploying to Firebase: ${message}`)
-    }
-    return await resp.data
-}
 
 const hostingRequest = (path: string, accessToken: string, method: string = 'GET', data?: object) => googleApiRequest(hostingRootUrl, path, accessToken, method, data)
 const firebaseRequest = (path: string, accessToken: string, method: string = 'GET', data?: object) => googleApiRequest(firebaseRootUrl, path, accessToken, method, data)
@@ -97,32 +84,23 @@ const files =  async (dir: string): Promise<{[path: string] : {filePath: string,
 
 const exists = (path: string) => fs.promises.stat(path).then( ()=> true, ()=> false)
 
-const storeInCache = async (moduleCache: ModuleCache, pathInCache: string, fileBuffer: Buffer) => {
-    console.log('Storing in cache', pathInCache)
-    await moduleCache.store(pathInCache, fileBuffer)
-}
+async function deployServerFiles({gitRepoUrl, commitId, deployTime, checkoutPath, moduleCache, firebaseAccessToken}:
+                                     {gitRepoUrl: string, commitId: string, deployTime: string, checkoutPath: string, moduleCache: ModuleCache, firebaseAccessToken: string}) {
+    const storeInCache = async (pathInCache: string, fileBuffer: Buffer) => {
+        console.log('Storing in cache', pathInCache)
+        await moduleCache.storeWithPermissions(pathInCache, fileBuffer, firebaseAccessToken)
+    }
 
-const storeRuntime = async (moduleCache: ModuleCache, version: string) => {
-    const fileBuffer: Buffer = await axios.get(`${runtimeImportPath}/serverRuntime.cjs`, {responseType: 'arraybuffer'}).then( resp => resp.data )
-    await storeInCache(moduleCache, `${version}/server/serverRuntime.cjs`, fileBuffer)
-}
-
-async function deployServerFiles({gitRepoUrl, commitId, deployTime, checkoutPath, moduleCache}:
-                                     {gitRepoUrl: string, commitId: string, deployTime: string, checkoutPath: string, moduleCache: ModuleCache}) {
     const versionInfo = JSON.stringify({gitRepoUrl, commitId, deployTime})
-    await moduleCache.store(path.join(commitId, 'versionInfo'), Buffer.from(versionInfo, 'utf8'))
 
+    await storeInCache(path.join(commitId, 'versionInfo'), Buffer.from(versionInfo, 'utf8'))
     const distPath = `${checkoutPath}/dist`
     const serverDirPath = `${distPath}/server`
     if (!(await exists(serverDirPath))) {
         return false
     }
-    const serverFilePaths = await allFilePaths(serverDirPath)
 
-    const storeInCache = async (pathInCache: string, fileBuffer: Buffer) => {
-        console.log('Storing in cache', pathInCache)
-        await moduleCache.store(pathInCache, fileBuffer)
-    }
+    const serverFilePaths = await allFilePaths(serverDirPath)
 
     const storeFile = async (filePath: string) => {
         const fileBuffer = await fs.promises.readFile(filePath)
@@ -162,8 +140,7 @@ async function getFirebaseConfig(firebaseProject: string, firebaseAccessToken: s
         app = operation.response
     }
 
-    let config = await firebaseRequest(`projects/${firebaseProject}/webApps/${app.appId}/config`, firebaseAccessToken)
-    return config
+    return await firebaseRequest(`projects/${firebaseProject}/webApps/${app.appId}/config`, firebaseAccessToken)
 }
 
 const usernameOf = (url: string) => new URL(url).pathname.substring(1).split('/')[0]
@@ -219,7 +196,7 @@ export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepo
 
     await Promise.all(uploadPromises)
 
-    await deployServerFiles({gitRepoUrl, checkoutPath, commitId, deployTime, moduleCache})
+    await deployServerFiles({gitRepoUrl, checkoutPath, commitId, deployTime, moduleCache, firebaseAccessToken})
 
     const serverAppRewrites = [
         {

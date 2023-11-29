@@ -82,7 +82,7 @@ export function expressApp(appFactory: AppFactory) {
     return app
 }
 
-export function expressAdminApp(deployHandler: RequestHandler, putHandler: RequestHandler, clearHandler?: RequestHandler) {
+export function expressAdminApp(deployHandler: RequestHandler, clearHandler?: RequestHandler) {
     const app = express()
     app.use(logCall)
     app.use(cors({

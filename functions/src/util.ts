@@ -2,7 +2,7 @@ import fs from 'fs'
 import {parseISO} from 'date-fns'
 import {getStorage} from 'firebase-admin/storage'
 import path from 'path'
-import axios, {HttpStatusCode} from 'axios'
+import axios, {HttpStatusCode, ResponseType} from 'axios'
 
 export const elementoHost = 'https://elemento.online'
 export const runtimeImportPath = elementoHost + '/lib'
@@ -36,9 +36,11 @@ export const parseParam = (param: string) => {
 
 export interface ModuleCache {
     downloadToFile(path: string, localFilePath: string, logError?: boolean): Promise<boolean>
-    store(path: string, contents: Buffer, etag?: string): Promise<void>
+    storeWithEtag(path: string, contents: Buffer, etag: string): Promise<void>
     clear(): Promise<void>
     etag(path: string): Promise<string | undefined>
+
+    storeWithPermissions(path: string, contents: Buffer, accessToken: string): Promise<void>
 }
 
 export async function getFromCache(cachePath: string, localPath: string, cache: ModuleCache) {
@@ -53,10 +55,10 @@ export async function getFromCache(cachePath: string, localPath: string, cache: 
     }
 }
 
-export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: Buffer) {
+export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: Buffer, firebaseAccessToken: string) {
     await Promise.all([
         mkdirWriteFile(localPath, contents),
-        cache.store(cachePath, contents)
+        cache.storeWithPermissions(cachePath, contents, firebaseAccessToken)
     ])
 }
 
@@ -88,12 +90,19 @@ export class CloudStorageCache implements ModuleCache {
         return response.metadata?.sourceEtag
     }
 
-    async store(path: string, contents: Buffer, etag?: string): Promise<void> {
+    async storeWithEtag(path: string, contents: Buffer, etag: string): Promise<void> {
         const file = this.file(path)
         await file.save(contents)
         if (etag) {
             await file.setMetadata({metadata: {sourceEtag: etag}})
         }
+    }
+
+    async storeWithPermissions(path: string, contents: Buffer, accessToken: string) {
+        const encodedPath = encodeURIComponent(this.cachePath(path))
+        await googleApiRequest('https://storage.googleapis.com',
+            `upload/storage/v1/b/${this.bucket().name}/o?uploadType=media&name=${encodedPath}`,
+            accessToken, 'POST', contents)
     }
 
     async clear(prefix: string = ''): Promise<void> {
@@ -119,4 +128,23 @@ export const isCacheObjectSourceModified = async (url: string, cachePath: string
         headers: {'If-None-Match': etag},
         validateStatus: status => status <= 304
     }).then( resp => resp.status !== HttpStatusCode.NotModified)
+}
+
+export async function googleApiRequest(host: string, path: string, accessToken: string, method?: string, data?: object) {
+    const url = `${host}/${path}`
+    const responseType = 'json' as ResponseType
+    const headers = accessToken ? {headers: {Authorization: `Bearer ${accessToken}`}} : {}
+    const options = {url, method, responseType, data, ...headers}
+    const resp = await axios.request(options)
+    if (resp.status !== 200) {
+        const {message} = (resp as any).result.error
+        throw new Error(`Error deploying to Firebase: ${message}`)
+    }
+    return await resp.data
+}
+
+export const checkData = (value: string | undefined, name: string) => {
+    if (!value) {
+        throw new Error(`${name} not supplied`)
+    }
 }

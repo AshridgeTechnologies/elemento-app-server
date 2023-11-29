@@ -7,6 +7,7 @@ import {getAccessToken, newTestDir, serverAppCode} from './testUtil'
 // @ts-ignore
 import admin from 'firebase-admin'
 import createPreviewServer from '../src/previewServer'
+import {fail} from 'assert'
 
 async function makePreviewServer(localFilePath: string, moduleCache: ModuleCache) {
     const serverPort = 7656
@@ -39,7 +40,6 @@ test('preview Server', async (t) => {
     })
 
     t.afterEach(stopServer)
-
 
     await t.test('deploys server app preview and updates it and serves result', async () => {
 
@@ -75,6 +75,22 @@ test('preview Server', async (t) => {
             const differenceResult = await resp.json()
             expect(differenceResult).toBe(-10)
         } finally {
+            await stopServer()
+        }
+    })
+
+    await t.test('does not deploy server app preview if invalid access token supplied', async () => {
+
+        const previewHeaders = {
+            'Content-Type': 'text/plain',
+            'x-firebase-access-token': firebaseAccessToken.substring(0, 50) + 'xxx' + firebaseAccessToken.substring(53),
+        }
+        const putPreviewUrl = `http://localhost:${serverPort}/preview/server/ServerApp1.mjs`
+        try {
+            const response = await fetch(putPreviewUrl, {method: 'PUT', headers: previewHeaders, body: serverAppCode})
+            expect(response.ok).toBe(false)
+            // fail('Preview deployed with invalid access token - should not be')
+        }  finally {
             await stopServer()
         }
     })

@@ -2,12 +2,11 @@ import {test} from 'node:test'
 import {expect} from 'expect'
 import {type Server} from 'http'
 import * as fs from 'fs'
-import {CloudStorageCache} from '../src/util'
+import {CloudStorageCache, googleApiRequest} from '../src/util'
 import {getAccessToken, makeAdminServer, newTestDir, wait} from './testUtil'
 import git from 'isomorphic-git'
 // @ts-ignore
 import admin from 'firebase-admin'
-import {googleApiRequest} from '../src/adminUtil'
 import * as dotenv from 'dotenv'
 
 const getLatestCommitId = async (dir: string) => {

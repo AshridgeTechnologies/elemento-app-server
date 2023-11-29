@@ -1,18 +1,18 @@
 import {AppFactory, expressPreviewApp} from './expressUtils.js'
 import path from 'path'
-import {fileExists, getFromCache, isCacheObjectSourceModified, ModuleCache, putIntoCacheAndFile, runtimeImportPath} from './util.js'
+import {checkData, fileExists, getFromCache, isCacheObjectSourceModified, ModuleCache, putIntoCacheAndFile, runtimeImportPath} from './util.js'
 import {AppServerProperties} from './appServer'
 import fs from 'fs'
 import axios from 'axios'
 
 const appModuleCache: {[appName: string]: Function | null} = {}
 
-async function downloadToCacheAndFile(url: string, localPath: string, cachePath: string, moduleCache: ModuleCache) {
+async function downloadToCacheAndFileWithEtag(url: string, localPath: string, cachePath: string, moduleCache: ModuleCache) {
     const response = await axios.get(url, {responseType: 'arraybuffer'})
     const etag = response.headers['etag']
     const fileBuffer: Buffer = await response.data
     await Promise.all([
-        moduleCache.store(cachePath, fileBuffer, etag),
+        moduleCache.storeWithEtag(cachePath, fileBuffer, etag),
         fs.promises.mkdir(path.dirname(localPath), {recursive: true}).then( ()=> fs.promises.writeFile(localPath, fileBuffer) )
     ])
 }
@@ -23,17 +23,7 @@ const updateServerRuntime = async (serverRuntimeUrl: string, cachePath: string, 
         const modified = await isCacheObjectSourceModified(serverRuntimeUrl, cachePath, cache)
         lastModifiedCheckTime = Date.now()
         if (modified) {
-            await downloadToCacheAndFile(serverRuntimeUrl, localPath, cachePath, cache)
-        }
-    }
-
-    const alreadyDownloaded = await fileExists(localPath)
-    if (!alreadyDownloaded) {
-        console.log('Fetching from cache', cachePath)
-        await fs.promises.mkdir(path.dirname(localPath), {recursive: true})
-        const foundInCache = await cache.downloadToFile(cachePath, localPath, true)
-        if (!foundInCache) {
-            throw new Error(`File ${cachePath} not found in cache`)
+            await downloadToCacheAndFileWithEtag(serverRuntimeUrl, localPath, cachePath, cache)
         }
     }
 }
@@ -82,6 +72,9 @@ const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, 
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('put handler', req.url)
         try {
+            const firebaseAccessToken = req.get('x-firebase-access-token')
+            checkData(firebaseAccessToken, 'Google access token')
+
             const elementoFilesPath = path.join(localFilePath, 'serverFiles')
             const appModulePath = path.join(elementoFilesPath, req.url)
             const serverRuntimeUrl = `${runtimeImportPath}/serverRuntime.cjs`
@@ -89,7 +82,7 @@ const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, 
             const serverRuntimeLocalPath = path.join(elementoFilesPath, serverRuntimePath)
             const cachePath = req.url.substring(1)
             const moduleContents = req.body as Buffer
-            await putIntoCacheAndFile(cachePath, appModulePath, moduleCache, moduleContents)
+            await putIntoCacheAndFile(cachePath, appModulePath, moduleCache, moduleContents, firebaseAccessToken)
             const [, appName] = req.url.match(/\/(\w+)\.[mc]?js$/) || []
             if (appName) {
                 appModuleCache[appName] = null

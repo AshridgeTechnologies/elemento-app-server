@@ -7,7 +7,8 @@ import createAdminServer from '../src/adminServer'
 
 export function getAccessToken(serviceAccountKey: any): Promise<string> {
     const SCOPES = [
-        'https://www.googleapis.com/auth/firebase'
+        'https://www.googleapis.com/auth/firebase',
+        'https://www.googleapis.com/auth/devstorage.full_control'
     ]
 
     return new Promise(function (resolve, reject) {
