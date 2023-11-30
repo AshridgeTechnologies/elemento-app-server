@@ -18,4 +18,6 @@ const theAdminServer = createAdminServer({localFilePath, moduleCache})
 export const adminServer = functions.https.onRequest(theAdminServer)
 
 const thePreviewServer = createPreviewServer({localFilePath, moduleCache})
-export const previewServer = functions.https.onRequest(thePreviewServer)
+export const previewServer = functions
+    .runWith({maxInstances: 1})
+    .https.onRequest(thePreviewServer)
