@@ -47,18 +47,28 @@ test('preview Server', async (t) => {
             'Content-Type': 'text/plain',
             'x-firebase-access-token': firebaseAccessToken,
         }
-        const putPreviewUrl = `http://localhost:${serverPort}/preview/server/ServerApp1.mjs`
+        const putPreviewUrl = `http://localhost:${serverPort}/preview`
         const getPreviewUrl = `http://localhost:${serverPort}/capi/preview`
         const deployTime = Date.now()
         const serverAppWithTotalFunction = serverAppCode.replace('//Totalcomment', '').replace( '// time', '// time ' + deployTime)
+        const serverAppPath = 'server/ServerApp1.mjs'
+        const body1 = `//// File: ${serverAppPath}\n${serverAppWithTotalFunction}\n//// End of file\n`
+                        + `//// File: file2.txt\nSome text\n//// End of file\n`
+
+        let seq = 1
+        async function cachedFileContents(path: string) {
+            const tempFilePath = `${localFilePath}/temp${seq++}`
+            await moduleCache.downloadToFile(path, tempFilePath)
+            return await fs.promises.readFile(tempFilePath, 'utf8')
+        }
+
+
         try {
-            await fetch(putPreviewUrl, {method: 'PUT', headers: previewHeaders, body: serverAppWithTotalFunction})
+            await fetch(putPreviewUrl, {method: 'PUT', headers: previewHeaders, body: body1})
 
             console.log('Preview deployed')
-            const tempFilePath = `${localFilePath}/temp1`
-            await moduleCache.downloadToFile(`preview/server/ServerApp1.mjs`, tempFilePath)
-            const fileContents = await fs.promises.readFile(tempFilePath, 'utf8')
-            expect(fileContents).toBe(serverAppWithTotalFunction)
+            expect(await cachedFileContents(`preview/server/ServerApp1.mjs`)).toBe(serverAppWithTotalFunction)
+            expect(await cachedFileContents(`preview/file2.txt`)).toBe('Some text')
             await expect(moduleCache.exists(`preview/server/serverRuntime.cjs`)).resolves.toBe(true)
             await expect(isCacheObjectSourceModified(`${runtimeImportPath}/serverRuntime.cjs`, 'preview/server/serverRuntime.cjs', moduleCache)).resolves.toBe(false)
             // different source url, so expect modified
@@ -70,7 +80,8 @@ test('preview Server', async (t) => {
             expect(apiResult).toBe(90)
 
             const serverAppWithDifference = serverAppCode.replace('//Differencecomment', '').replace( '// time', '// time ' + deployTime)
-            await fetch(putPreviewUrl, {method: 'PUT', headers: previewHeaders, body: serverAppWithDifference})
+            const body2 = `//// File: ${serverAppPath}\n${serverAppWithDifference}\n//// End of file`
+            await fetch(putPreviewUrl, {method: 'PUT', headers: previewHeaders, body: body2})
             const resp = await fetch(`${getPreviewUrl}/ServerApp1/Difference?x=20&y=30`)
             const differenceResult = await resp.json()
             expect(differenceResult).toBe(-10)
@@ -85,9 +96,10 @@ test('preview Server', async (t) => {
             'Content-Type': 'text/plain',
             'x-firebase-access-token': firebaseAccessToken.substring(0, 50) + 'xxx' + firebaseAccessToken.substring(53),
         }
-        const putPreviewUrl = `http://localhost:${serverPort}/preview/server/ServerApp1.mjs`
+        const putPreviewUrl = `http://localhost:${serverPort}/preview`
         try {
-            const response = await fetch(putPreviewUrl, {method: 'PUT', headers: previewHeaders, body: serverAppCode})
+            const body = `//// File: server/ServerApp1.mjs\n${serverAppCode}\n//// End of file`
+            const response = await fetch(putPreviewUrl, {method: 'PUT', headers: previewHeaders, body})
             expect(response.ok).toBe(false)
             // fail('Preview deployed with invalid access token - should not be')
         }  finally {

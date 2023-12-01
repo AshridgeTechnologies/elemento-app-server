@@ -1,10 +1,12 @@
 import {AppFactory, expressPreviewApp} from './expressUtils.js'
 import path from 'path'
-import {checkData, fileExists, getFromCache, isCacheObjectSourceModified, ModuleCache, putIntoCacheAndFile, runtimeImportPath} from './util.js'
+import {checkData, getFromCache, isCacheObjectSourceModified, ModuleCache, putIntoCacheAndFile, runtimeImportPath} from './util.js'
 import {AppServerProperties} from './appServer'
 import fs from 'fs'
 import axios from 'axios'
 
+const FILE_HEADER_PREFIX = '//// File: '
+const EOF_DELIMITER = '//// End of file'
 const appModuleCache: {[appName: string]: Function | null} = {}
 
 async function downloadToCacheAndFileWithEtag(url: string, localPath: string, cachePath: string, moduleCache: ModuleCache) {
@@ -15,6 +17,18 @@ async function downloadToCacheAndFileWithEtag(url: string, localPath: string, ca
         moduleCache.storeWithEtag(cachePath, fileBuffer, etag),
         fs.promises.mkdir(path.dirname(localPath), {recursive: true}).then( ()=> fs.promises.writeFile(localPath, fileBuffer) )
     ])
+}
+
+type FileItems = {[name: string]: string}
+function extractFileItems(combinedFiles: string): FileItems {
+    const fileItems = combinedFiles.split(EOF_DELIMITER).filter( item => item.trim() !== '')
+    return Object.fromEntries(fileItems.map( item => {
+        const fileNameRegex = new RegExp(`${FILE_HEADER_PREFIX}(\\S+)`)
+        const match = item.match(fileNameRegex) || []
+        const filePath = match[1]
+        const fileText = item.replace(fileNameRegex, '').trim()
+        return [filePath, fileText]
+    }))
 }
 
 let lastModifiedCheckTime = 0
@@ -71,22 +85,30 @@ function createPreviewAppFactory({localFilePath, moduleCache}: AppServerProperti
 const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('put handler', req.url)
-        try {
-            const firebaseAccessToken = req.get('x-firebase-access-token')
-            checkData(firebaseAccessToken, 'Google access token')
 
-            const elementoFilesPath = path.join(localFilePath, 'serverFiles')
-            const appModulePath = path.join(elementoFilesPath, req.url)
-            const serverRuntimeUrl = `${runtimeImportPath}/serverRuntime.cjs`
-            const serverRuntimePath = 'preview/server/serverRuntime.cjs'
-            const serverRuntimeLocalPath = path.join(elementoFilesPath, serverRuntimePath)
-            const cachePath = req.url.substring(1)
-            const moduleContents = req.body as Buffer
-            await putIntoCacheAndFile(cachePath, appModulePath, moduleCache, moduleContents, firebaseAccessToken)
-            const [, appName] = req.url.match(/\/(\w+)\.[mc]?js$/) || []
+        const firebaseAccessToken: string = req.get('x-firebase-access-token')
+        checkData(firebaseAccessToken, 'Google access token')
+        const elementoFilesPath = path.join(localFilePath, 'serverFiles')
+
+        async function storeFile(filePath: string, fileText: string) {
+            const fileContents = Buffer.from(fileText)
+            const appModulePath = path.join(elementoFilesPath, filePath)
+            await putIntoCacheAndFile(filePath, appModulePath, moduleCache, fileContents, firebaseAccessToken)
+            const [, appName] = filePath.match(/\/(\w+)\.[mc]?js$/) || []
             if (appName) {
                 appModuleCache[appName] = null
             }
+        }
+
+        try {
+            const bodyContents = (req.body as Buffer).toString()
+            const fileItems = extractFileItems(bodyContents)
+            const filePromises = Object.entries(fileItems).map(([filePath, fileText]) => storeFile(`preview/${filePath}`, fileText))
+            await Promise.all(filePromises)
+
+            const serverRuntimeUrl = `${runtimeImportPath}/serverRuntime.cjs`
+            const serverRuntimePath = 'preview/server/serverRuntime.cjs'
+            const serverRuntimeLocalPath = path.join(elementoFilesPath, serverRuntimePath)
             await updateServerRuntime(serverRuntimeUrl, serverRuntimePath, serverRuntimeLocalPath, moduleCache)
             res.end()
         } catch (err) {
