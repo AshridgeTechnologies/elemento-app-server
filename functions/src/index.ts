@@ -1,10 +1,10 @@
 import os from 'os'
 import * as functions from 'firebase-functions'
 import {initializeApp} from 'firebase-admin/app'
-import {CloudStorageCache} from './util.js'
 import createAppServer from './appServer.js'
 import createAdminServer from './adminServer.js'
 import createPreviewServer from './previewServer.js'
+import {CloudStorageCache} from './CloudStorageCache'
 
 initializeApp()
 

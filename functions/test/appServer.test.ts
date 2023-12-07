@@ -21,7 +21,7 @@ const createModuleCache = (): ModuleCache & {modules:any} => ({
         this.modules[path] = contents
         return Promise.resolve()
     },
-    clear() {
+    clear(accessToken: string) {
         this.modules = {}
         return Promise.resolve()
     },

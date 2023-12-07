@@ -1,12 +1,11 @@
 import {test} from 'node:test'
-//import {expect} from 'expect'
 import {deployToHosting} from '../src/adminUtil'
 import * as fs from 'fs'
 import * as os from 'os'
 import {getAccessToken} from './testUtil'
-import {CloudStorageCache} from '../src/util'
 // @ts-ignore
 import admin from 'firebase-admin'
+import {CloudStorageCache} from '../src/CloudStorageCache'
 
 const firebaseProject = 'hosted-apps-spike-1'
 const bucketName = `${firebaseProject}.appspot.com`

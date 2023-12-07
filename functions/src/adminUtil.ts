@@ -5,7 +5,7 @@ import {gzipSync} from 'fflate'
 
 import fs from 'fs'
 import crypto from 'crypto'
-import {googleApiRequest, ModuleCache, runtimeImportPath} from './util.js'
+import {fileExists, googleApiRequest, ModuleCache, runtimeImportPath} from './util.js'
 import path from 'path'
 
 const ASSET_DIR = 'files'
@@ -82,8 +82,6 @@ const files =  async (dir: string): Promise<{[path: string] : {filePath: string,
     return Object.fromEntries(fullFileEntries.map( f => [f.filePath, f]))
 }
 
-const exists = (path: string) => fs.promises.stat(path).then( ()=> true, ()=> false)
-
 async function deployServerFiles({gitRepoUrl, commitId, deployTime, checkoutPath, moduleCache, firebaseAccessToken}:
                                      {gitRepoUrl: string, commitId: string, deployTime: string, checkoutPath: string, moduleCache: ModuleCache, firebaseAccessToken: string}) {
     const storeInCache = async (pathInCache: string, fileBuffer: Buffer) => {
@@ -96,7 +94,7 @@ async function deployServerFiles({gitRepoUrl, commitId, deployTime, checkoutPath
     await storeInCache(path.join(commitId, 'versionInfo'), Buffer.from(versionInfo, 'utf8'))
     const distPath = `${checkoutPath}/dist`
     const serverDirPath = `${distPath}/server`
-    if (!(await exists(serverDirPath))) {
+    if (!(await fileExists(serverDirPath))) {
         return false
     }
 

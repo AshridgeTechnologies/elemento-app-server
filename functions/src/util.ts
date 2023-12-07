@@ -1,6 +1,5 @@
 import fs from 'fs'
 import {parseISO} from 'date-fns'
-import {getStorage} from 'firebase-admin/storage'
 import path from 'path'
 import axios, {HttpStatusCode, ResponseType} from 'axios'
 
@@ -37,7 +36,7 @@ export const parseParam = (param: string) => {
 export interface ModuleCache {
     downloadToFile(path: string, localFilePath: string, logError?: boolean): Promise<boolean>
     storeWithEtag(path: string, contents: Buffer, etag: string): Promise<void>
-    clear(): Promise<void>
+    clear(accessToken: string, prefix?: string): Promise<void>
     etag(path: string): Promise<string | undefined>
 
     storeWithPermissions(path: string, contents: Buffer, accessToken: string): Promise<void>
@@ -62,65 +61,11 @@ export async function putIntoCacheAndFile(cachePath: string, localPath: string, 
     ])
 }
 
-export function clearCache(localPath: string, cache: ModuleCache) {
-    return Promise.all([rmdir(localPath), cache.clear()])
+export function clearCache(localPath: string, cache: ModuleCache, accessToken: string, prefix?: string) {
+    const dirToClear = path.join(localPath, prefix ?? '')
+    return cache.clear(accessToken, prefix).then( ()=> rmdir(dirToClear))
 }
 
-
-export class CloudStorageCache implements ModuleCache {
-    constructor(private readonly bucketName?: string) {
-    }
-
-    downloadToFile(path: string, localFilePath: string, logError = false): Promise<boolean> {
-        return this.file(path).download({destination: localFilePath})
-            .then( () => true, (e: any) => {
-                if (logError) console.error('downloadToFile', e)
-                return false
-            })
-    }
-
-    exists(path: string) : Promise<boolean> {
-        return this.file(path).exists().then( ([result]) => result)
-    }
-
-    async etag(path: string): Promise<string | undefined> {
-        const exists = await this.exists(path)
-        if (!exists) return undefined
-        const [response] = await this.file(path).getMetadata()
-        return response.metadata?.sourceEtag
-    }
-
-    async storeWithEtag(path: string, contents: Buffer, etag: string): Promise<void> {
-        const file = this.file(path)
-        await file.save(contents)
-        if (etag) {
-            await file.setMetadata({metadata: {sourceEtag: etag}})
-        }
-    }
-
-    async storeWithPermissions(path: string, contents: Buffer, accessToken: string) {
-        const encodedPath = encodeURIComponent(this.cachePath(path))
-        await googleApiRequest('https://storage.googleapis.com',
-            `upload/storage/v1/b/${this.bucket().name}/o?uploadType=media&name=${encodedPath}`,
-            accessToken, 'POST', contents)
-    }
-
-    async clear(prefix: string = ''): Promise<void> {
-        const [cacheFiles] = await this.bucket().getFiles({prefix: this.cachePath(prefix)})
-        await Promise.all(cacheFiles.map( f => this.bucket().file(f.name).delete()))
-    }
-
-    private bucket() {
-        return getStorage().bucket(this.bucketName)
-    }
-    private file(path: string) {
-        return this.bucket().file(this.cachePath(path))
-    }
-
-    private cachePath(path: string) {
-        return 'deployCache' + '/' + path.replace(/^https?:\/\//, '')
-    }
-}
 
 export const isCacheObjectSourceModified = async (url: string, cachePath: string, cache: ModuleCache) => {
     const etag = await cache.etag(cachePath)
@@ -136,8 +81,8 @@ export async function googleApiRequest(host: string, path: string, accessToken: 
     const headers = accessToken ? {headers: {Authorization: `Bearer ${accessToken}`}} : {}
     const options = {url, method, responseType, data, ...headers}
     const resp = await axios.request(options)
-    if (resp.status !== 200) {
-        const {message} = (resp as any).result.error
+    if (resp.status !== 200 && resp.status !== 204) {
+        const {message} = (resp as any).error
         throw new Error(`Error deploying to Firebase: ${message}`)
     }
     return await resp.data

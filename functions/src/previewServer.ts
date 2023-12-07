@@ -1,6 +1,6 @@
 import {AppFactory, expressPreviewApp} from './expressUtils.js'
 import path from 'path'
-import {checkData, getFromCache, isCacheObjectSourceModified, ModuleCache, putIntoCacheAndFile, runtimeImportPath} from './util.js'
+import {checkData, clearCache, getFromCache, isCacheObjectSourceModified, ModuleCache, putIntoCacheAndFile, runtimeImportPath} from './util.js'
 import {AppServerProperties} from './appServer'
 import fs from 'fs'
 import axios from 'axios'
@@ -116,9 +116,25 @@ const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, 
         }
     }
 
+const createClearHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
+    async (req: any, res: any, next: (err?: any) => void) => {
+        console.log('clear handler', req.url)
+        const elementoFilesPath = path.join(localFilePath, 'serverFiles')
+        try {
+            const firebaseAccessToken: string = req.get('x-firebase-access-token')
+            checkData(firebaseAccessToken, 'Google access token')
+            await clearCache(elementoFilesPath, moduleCache, firebaseAccessToken, 'preview')
+            res.end()
+        } catch (err) {
+            next(err)
+        }
+    }
+
+
 export default function createPreviewServer(props: {localFilePath: string, moduleCache: ModuleCache}) {
     console.log('createPreviewServer', )
     const appFactory = createPreviewAppFactory(props)
     const putHandler = createPutHandler(props)
-    return expressPreviewApp(appFactory, putHandler)
+    const clearHandler = createClearHandler(props)
+    return expressPreviewApp(appFactory, putHandler, clearHandler)
 }

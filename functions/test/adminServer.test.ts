@@ -2,12 +2,13 @@ import {test} from 'node:test'
 import {expect} from 'expect'
 import {type Server} from 'http'
 import * as fs from 'fs'
-import {CloudStorageCache, googleApiRequest} from '../src/util'
+import {googleApiRequest} from '../src/util'
 import {getAccessToken, makeAdminServer, newTestDir, wait} from './testUtil'
 import git from 'isomorphic-git'
 // @ts-ignore
 import admin from 'firebase-admin'
 import * as dotenv from 'dotenv'
+import {CloudStorageCache} from '../src/CloudStorageCache'
 
 const getLatestCommitId = async (dir: string) => {
     const commits = await git.log({

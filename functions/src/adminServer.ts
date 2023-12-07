@@ -34,7 +34,9 @@ const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: strin
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('clear handler', req.url)
         try {
-            await clearCache(localFilePath, moduleCache)
+            const firebaseAccessToken: string = req.get('x-firebase-access-token')
+            checkData(firebaseAccessToken, 'Google access token')
+            await clearCache(localFilePath, moduleCache, firebaseAccessToken)
             res.end()
         } catch (err) {
             next(err)

@@ -97,18 +97,19 @@ export function expressAdminApp(deployHandler: RequestHandler, clearHandler?: Re
     return app
 }
 
-export function expressPreviewApp(appFactory: AppFactory, putHandler: RequestHandler) {
+export function expressPreviewApp(appFactory: AppFactory, putHandler: RequestHandler, clearHandler: RequestHandler) {
     const app = express()
     app.use(logCall)
     app.use(cors({
         origin: [elementoHost, 'http://localhost:8000'],
-        methods: ['PUT'],
+        methods: ['PUT', 'POST'],
         preflightContinue: false
     }))
     app.use(['/capi'], express.json())
     app.use('/preview', express.raw({type: '*/*'}))
     app.use(['/capi'], requestHandler(appFactory))
     app.put('/preview', putHandler)
+    app.post('/clearpreview', clearHandler)
     app.use(errorHandler)
     return app
 }

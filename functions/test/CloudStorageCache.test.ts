@@ -1,12 +1,12 @@
 import {test} from 'node:test'
 import {expect} from 'expect'
 
-import {CloudStorageCache} from '../src/util'
 import * as os from 'os'
 import * as fs from 'fs'
 // @ts-ignore
 import admin from 'firebase-admin'
 import {clearDirectory, getAccessToken} from './testUtil'
+import {CloudStorageCache} from '../src/CloudStorageCache'
 
 const fileContent = 'some code'
 const fileContentBuf = Buffer.from(fileContent, 'utf8')
@@ -61,7 +61,8 @@ test('app Server', async (t) => {
         await expect(cache.etag(nonExistentFileUrl)).resolves.toBe(undefined)
     })
 
-    await t.test('CloudStorageCache clears files', async () => {
+    await t.test('CloudStorageCache clears files with permissions', async () => {
+        const firebaseAccessToken = await getAccessToken(serviceAccountKey)
         const fileUrl1 = `dir1/theFile.${Date.now()}.js`
         const fileUrl2 = `dir2/theFile.${Date.now()}.js`
         const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.3'
@@ -73,11 +74,11 @@ test('app Server', async (t) => {
         await cache.storeWithEtag(fileUrl1, fileContentBuf, 'abc123')
         await cache.storeWithEtag(fileUrl2, fileContentBuf, 'abc123')
 
-        await cache.clear('dir1')
+        await cache.clear(firebaseAccessToken, 'dir1')
         await expect(cache.downloadToFile(fileUrl1, downloadFilePath)).resolves.toBe(false)
         await expect(cache.downloadToFile(fileUrl2, downloadFilePath, true)).resolves.toBe(true)
 
-        await cache.clear('dir2')
+        await cache.clear(firebaseAccessToken, 'dir2')
         await expect(cache.downloadToFile(fileUrl2, downloadFilePath)).resolves.toBe(false)
     })
 })
