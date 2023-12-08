@@ -111,7 +111,7 @@ test('preview Server', async (t) => {
             'Content-Type': 'text/plain',
             'x-firebase-access-token': firebaseAccessToken,
         }
-        const clearPreviewUrl = `http://localhost:${serverPort}/clearpreview`
+        const clearPreviewUrl = `http://localhost:${serverPort}/preview/clear`
 
         await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', moduleCache, Buffer.from('file 1 contents'), firebaseAccessToken)
         await putIntoCacheAndFile('deploy1/file2.txt', localFilePath + '/serverFiles/deploy1/file2.txt', moduleCache, Buffer.from('file 2 contents'), firebaseAccessToken)
@@ -131,7 +131,7 @@ test('preview Server', async (t) => {
         const previewHeaders = {
             'Content-Type': 'text/plain',
         }
-        const clearPreviewUrl = `http://localhost:${serverPort}/clearpreview`
+        const clearPreviewUrl = `http://localhost:${serverPort}/preview/clear`
 
         await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', moduleCache, Buffer.from('file 1 contents'), firebaseAccessToken)
         try {
@@ -149,7 +149,7 @@ test('preview Server', async (t) => {
             'Content-Type': 'text/plain',
             'x-firebase-access-token': firebaseAccessToken.substring(0, 50) + 'xxx' + firebaseAccessToken.substring(53),
         }
-        const clearPreviewUrl = `http://localhost:${serverPort}/clearpreview`
+        const clearPreviewUrl = `http://localhost:${serverPort}/preview/clear`
 
         await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', moduleCache, Buffer.from('file 1 contents'), firebaseAccessToken)
         try {

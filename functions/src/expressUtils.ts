@@ -108,8 +108,8 @@ export function expressPreviewApp(appFactory: AppFactory, putHandler: RequestHan
     app.use(['/capi'], express.json())
     app.use('/preview', express.raw({type: '*/*'}))
     app.use(['/capi'], requestHandler(appFactory))
+    app.post('/preview/clear', clearHandler)
     app.put('/preview', putHandler)
-    app.post('/clearpreview', clearHandler)
     app.use(errorHandler)
     return app
 }
