@@ -1,7 +1,6 @@
-import express, {NextFunction, RequestHandler} from 'express'
+import {NextFunction} from 'express'
 import {DecodedIdToken, getAuth} from 'firebase-admin/auth'
-import cors from 'cors'
-import {elementoHost, parseParam} from './util.js'
+import {parseParam} from './util.js'
 
 export type ServerAppHandler = {
     [key: string]: {func: (...args: Array<any>) => any, update: boolean, argNames: string[]}
@@ -68,48 +67,8 @@ export const requestHandler = (appFactory: AppFactory) => async (req: any, res: 
     }
 }
 
-function logCall(req: any, res: any, next: NextFunction) {
+export function logCall(req: any, res: any, next: NextFunction) {
         console.log(req.method, req.url)
         next()
 }
 
-export function expressApp(appFactory: AppFactory) {
-    const app = express()
-    app.use(logCall)
-    app.use(['/capi'], express.json())
-    app.use(['/capi'], requestHandler(appFactory))
-    app.use(errorHandler)
-    return app
-}
-
-export function expressAdminApp(deployHandler: RequestHandler, clearHandler?: RequestHandler) {
-    const app = express()
-    app.use(logCall)
-    app.use(cors({
-        origin: [elementoHost, 'http://localhost:8000'],
-        methods: ['POST'],
-        preflightContinue: false
-    }))
-    app.use(['/deploy', ], express.json())
-    app.post('/deploy', deployHandler)
-    clearHandler && app.post('/clearcache', clearHandler)
-    app.use(errorHandler)
-    return app
-}
-
-export function expressPreviewApp(appFactory: AppFactory, putHandler: RequestHandler, clearHandler: RequestHandler) {
-    const app = express()
-    app.use(logCall)
-    app.use(cors({
-        origin: [elementoHost, 'http://localhost:8000'],
-        methods: ['PUT', 'POST'],
-        preflightContinue: false
-    }))
-    app.use(['/capi'], express.json())
-    app.use('/preview', express.raw({type: '*/*'}))
-    app.use(['/capi'], requestHandler(appFactory))
-    app.post('/preview/clear', clearHandler)
-    app.put('/preview', putHandler)
-    app.use(errorHandler)
-    return app
-}

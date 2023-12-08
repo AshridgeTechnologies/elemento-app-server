@@ -1,13 +1,15 @@
-import {type AppFactory, expressApp} from './expressUtils.js'
+import {type AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
 import fs from 'fs'
 import path from 'path'
 import {getFromCache, ModuleCache} from './util.js'
+import express from 'express'
 
 export type AppServerProperties = {
     localFilePath: string,
     moduleCache: ModuleCache,
 }
-export function createAppFactory({localFilePath, moduleCache}: AppServerProperties): AppFactory {
+
+function createAppFactory({localFilePath, moduleCache}: AppServerProperties): AppFactory {
     const elementoFilesPath = path.join(localFilePath, 'serverFiles')
     fs.mkdirSync(elementoFilesPath, {recursive: true})
     console.log('Storing files in', elementoFilesPath)
@@ -31,5 +33,11 @@ export function createAppFactory({localFilePath, moduleCache}: AppServerProperti
 export default function createAppServer(props: AppServerProperties) {
     console.log('createAppServer')
     const appFactory = createAppFactory(props)
-    return expressApp(appFactory)
+
+    const app = express()
+    app.use(logCall)
+    app.use(['/capi'], express.json())
+    app.use(['/capi'], requestHandler(appFactory))
+    app.use(errorHandler)
+    return app
 }

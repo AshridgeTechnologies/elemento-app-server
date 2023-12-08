@@ -1,8 +1,9 @@
-import {Request} from 'express'
-import {expressAdminApp} from './expressUtils.js'
+import express, {Request} from 'express'
 import path from 'path'
 import {deployToHosting} from './adminUtil.js'
-import {checkData, clearCache, ModuleCache} from './util.js'
+import {checkData, clearCache, elementoHost, ModuleCache} from './util.js'
+import cors from 'cors'
+import {errorHandler, logCall} from './expressUtils.js'
 
 const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
     async (req: Request, res: any, next: (err?: any) => void) => {
@@ -47,5 +48,17 @@ export default function createAdminServer(props: {localFilePath: string, moduleC
     console.log('createAdminServer', )
     const deployHandler = createDeployHandler(props)
     const clearHandler = createClearHandler(props)
-    return expressAdminApp(deployHandler, clearHandler)
+
+    const app = express()
+    app.use(logCall)
+    app.use(cors({
+        origin: [elementoHost, 'http://localhost:8000'],
+        methods: ['POST'],
+        preflightContinue: false
+    }))
+    app.use(['/deploy',], express.json())
+    app.post('/deploy', deployHandler)
+    clearHandler && app.post('/clearcache', clearHandler)
+    app.use(errorHandler)
+    return app
 }

@@ -1,9 +1,20 @@
-import {AppFactory, expressPreviewApp} from './expressUtils.js'
+import {AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
 import path from 'path'
-import {checkData, clearCache, getFromCache, isCacheObjectSourceModified, ModuleCache, putIntoCacheAndFile, runtimeImportPath} from './util.js'
-import {AppServerProperties} from './appServer'
+import {
+    checkData,
+    clearCache,
+    elementoHost,
+    getFromCache,
+    isCacheObjectSourceModified,
+    ModuleCache,
+    putIntoCacheAndFile,
+    runtimeImportPath
+} from './util.js'
+import {AppServerProperties} from './appServer.js'
 import fs from 'fs'
 import axios from 'axios'
+import express from 'express'
+import cors from 'cors'
 
 const FILE_HEADER_PREFIX = '//// File: '
 const EOF_DELIMITER = '//// End of file'
@@ -20,6 +31,7 @@ async function downloadToCacheAndFileWithEtag(url: string, localPath: string, ca
 }
 
 type FileItems = {[name: string]: string}
+
 function extractFileItems(combinedFiles: string): FileItems {
     const fileItems = combinedFiles.split(EOF_DELIMITER).filter( item => item.trim() !== '')
     return Object.fromEntries(fileItems.map( item => {
@@ -130,11 +142,25 @@ const createClearHandler = ({localFilePath, moduleCache}: {localFilePath: string
         }
     }
 
-
 export default function createPreviewServer(props: {localFilePath: string, moduleCache: ModuleCache}) {
     console.log('createPreviewServer', )
     const appFactory = createPreviewAppFactory(props)
     const putHandler = createPutHandler(props)
     const clearHandler = createClearHandler(props)
-    return expressPreviewApp(appFactory, putHandler, clearHandler)
+    // return expressPreviewApp(appFactory, putHandler, clearHandler)
+
+    const app = express()
+    app.use(logCall)
+    app.use(cors({
+        origin: [elementoHost, 'http://localhost:8000'],
+        methods: ['PUT', 'POST'],
+        preflightContinue: false
+    }))
+    app.use(['/capi'], express.json())
+    app.use('/preview', express.raw({type: '*/*'}))
+    app.use(['/capi'], requestHandler(appFactory))
+    app.post('/preview/clear', clearHandler)
+    app.put('/preview', putHandler)
+    app.use(errorHandler)
+    return app
 }
