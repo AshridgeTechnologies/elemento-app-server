@@ -1,8 +1,9 @@
 import {type AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
 import fs from 'fs'
 import path from 'path'
-import {getFromCache, ModuleCache} from './util.js'
+import {getFromCache} from './util.js'
 import express from 'express'
+import {ModuleCache} from './CloudStorageCache.js'
 
 export type AppServerProperties = {
     localFilePath: string,

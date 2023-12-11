@@ -1,20 +1,12 @@
 import {AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
 import path from 'path'
-import {
-    checkData,
-    clearCache,
-    elementoHost,
-    getFromCache,
-    isCacheObjectSourceModified,
-    ModuleCache,
-    putIntoCacheAndFile,
-    runtimeImportPath
-} from './util.js'
+import {checkData, clearCache, elementoHost, getFromCache, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from './util.js'
 import {AppServerProperties} from './appServer.js'
 import fs from 'fs'
 import axios from 'axios'
 import express from 'express'
 import cors from 'cors'
+import {ModuleCache} from './CloudStorageCache.js'
 
 const FILE_HEADER_PREFIX = '//// File: '
 const EOF_DELIMITER = '//// End of file'
@@ -25,7 +17,7 @@ async function downloadToCacheAndFileWithEtag(url: string, localPath: string, ca
     const etag = response.headers['etag']
     const fileBuffer: Buffer = await response.data
     await Promise.all([
-        moduleCache.storeWithEtag(cachePath, fileBuffer, etag),
+        moduleCache.store(cachePath, fileBuffer, etag),
         fs.promises.mkdir(path.dirname(localPath), {recursive: true}).then( ()=> fs.promises.writeFile(localPath, fileBuffer) )
     ])
 }
@@ -97,15 +89,15 @@ function createPreviewAppFactory({localFilePath, moduleCache}: AppServerProperti
 const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('put handler', req.url)
-
-        const firebaseAccessToken: string = req.get('x-firebase-access-token')
-        checkData(firebaseAccessToken, 'Google access token')
+        if (!checkPreviewPassword(req, res)) {
+            return
+        }
         const elementoFilesPath = path.join(localFilePath, 'serverFiles')
 
         async function storeFile(filePath: string, fileText: string) {
             const fileContents = Buffer.from(fileText)
             const appModulePath = path.join(elementoFilesPath, filePath)
-            await putIntoCacheAndFile(filePath, appModulePath, moduleCache, fileContents, firebaseAccessToken)
+            await putIntoCacheAndFile(filePath, appModulePath, moduleCache, fileContents)
             const [, appName] = filePath.match(/\/(\w+)\.[mc]?js$/) || []
             if (appName) {
                 appModuleCache[appName] = null
@@ -128,14 +120,30 @@ const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, 
         }
     }
 
+const checkPreviewPassword = (req: any, res: any): boolean => {
+    const previewPassword: string = req.get('x-preview-password')
+    if (!previewPassword) {
+        res.status(401).send(`Preview password not supplied`)
+        return false
+    }
+    if (previewPassword !== process.env.PREVIEW_PASSWORD) {
+        res.status(403).send(`Invalid password`)
+        return false
+    }
+
+    return true
+}
+
 const createClearHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('clear handler', req.url)
+        if (!checkPreviewPassword(req, res)) {
+            return
+        }
+
         const elementoFilesPath = path.join(localFilePath, 'serverFiles')
         try {
-            const firebaseAccessToken: string = req.get('x-firebase-access-token')
-            checkData(firebaseAccessToken, 'Google access token')
-            await clearCache(elementoFilesPath, moduleCache, firebaseAccessToken, 'preview')
+            await clearCache(elementoFilesPath, moduleCache, 'preview')
             res.end()
         } catch (err) {
             next(err)

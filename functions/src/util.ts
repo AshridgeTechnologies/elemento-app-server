@@ -2,6 +2,7 @@ import fs from 'fs'
 import {parseISO} from 'date-fns'
 import path from 'path'
 import axios, {HttpStatusCode, ResponseType} from 'axios'
+import {ModuleCache} from './CloudStorageCache.js'
 
 export const elementoHost = 'https://elemento.online'
 export const runtimeImportPath = elementoHost + '/lib'
@@ -33,15 +34,6 @@ export const parseParam = (param: string) => {
     return param
 }
 
-export interface ModuleCache {
-    downloadToFile(path: string, localFilePath: string, logError?: boolean): Promise<boolean>
-    storeWithEtag(path: string, contents: Buffer, etag: string): Promise<void>
-    clear(accessToken: string, prefix?: string): Promise<void>
-    etag(path: string): Promise<string | undefined>
-
-    storeWithPermissions(path: string, contents: Buffer, accessToken: string): Promise<void>
-}
-
 export async function getFromCache(cachePath: string, localPath: string, cache: ModuleCache) {
     const alreadyDownloaded = await fileExists(localPath)
     if (!alreadyDownloaded) {
@@ -54,16 +46,16 @@ export async function getFromCache(cachePath: string, localPath: string, cache: 
     }
 }
 
-export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: Buffer, firebaseAccessToken: string) {
+export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: Buffer) {
     await Promise.all([
         mkdirWriteFile(localPath, contents),
-        cache.storeWithPermissions(cachePath, contents, firebaseAccessToken)
+        cache.store(cachePath, contents)
     ])
 }
 
-export function clearCache(localPath: string, cache: ModuleCache, accessToken: string, prefix?: string) {
+export function clearCache(localPath: string, cache: ModuleCache, prefix?: string) {
     const dirToClear = path.join(localPath, prefix ?? '')
-    return cache.clear(accessToken, prefix).then( ()=> rmdir(dirToClear))
+    return cache.clear(prefix).then( ()=> rmdir(dirToClear))
 }
 
 
@@ -83,13 +75,13 @@ export async function googleApiRequest(host: string, path: string, accessToken: 
     const resp = await axios.request(options)
     if (resp.status !== 200 && resp.status !== 204) {
         const {message} = (resp as any).error
-        throw new Error(`Error deploying to Firebase: ${message}`)
+        throw new Error(`Error in request to Google: ${message}`)
     }
     return await resp.data
 }
 
-export const checkData = (value: string | undefined, name: string) => {
+export const checkData = (value: string | undefined, name: string, res: any) => {
     if (!value) {
-        throw new Error(`${name} not supplied`)
+        res.status(400).send(`${name} not supplied`)
     }
 }

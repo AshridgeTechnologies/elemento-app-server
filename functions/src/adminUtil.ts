@@ -5,8 +5,9 @@ import {gzipSync} from 'fflate'
 
 import fs from 'fs'
 import crypto from 'crypto'
-import {fileExists, googleApiRequest, ModuleCache, runtimeImportPath} from './util.js'
+import {fileExists, googleApiRequest, runtimeImportPath} from './util.js'
 import path from 'path'
+import {ModuleCache} from './CloudStorageCache.js'
 
 const ASSET_DIR = 'files'
 const firebaseRootUrl = `https://firebase.googleapis.com/v1beta1`
@@ -86,7 +87,7 @@ async function deployServerFiles({gitRepoUrl, commitId, deployTime, checkoutPath
                                      {gitRepoUrl: string, commitId: string, deployTime: string, checkoutPath: string, moduleCache: ModuleCache, firebaseAccessToken: string}) {
     const storeInCache = async (pathInCache: string, fileBuffer: Buffer) => {
         console.log('Storing in cache', pathInCache)
-        await moduleCache.storeWithPermissions(pathInCache, fileBuffer, firebaseAccessToken)
+        await moduleCache.store(pathInCache, fileBuffer)
     }
 
     const versionInfo = JSON.stringify({gitRepoUrl, commitId, deployTime})

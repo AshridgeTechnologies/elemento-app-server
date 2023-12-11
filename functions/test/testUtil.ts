@@ -2,8 +2,8 @@ import {google} from 'googleapis'
 import {Credentials} from 'google-auth-library'
 import * as os from 'os'
 import * as fs from 'fs'
-import {ModuleCache} from '../src/util'
 import createAdminServer from '../src/adminServer'
+import {ModuleCache} from '../src/CloudStorageCache'
 
 export function getAccessToken(serviceAccountKey: any): Promise<string> {
     const SCOPES = [

@@ -1,9 +1,10 @@
 import express, {Request} from 'express'
 import path from 'path'
 import {deployToHosting} from './adminUtil.js'
-import {checkData, clearCache, elementoHost, ModuleCache} from './util.js'
+import {checkData, clearCache, elementoHost} from './util.js'
 import cors from 'cors'
 import {errorHandler, logCall} from './expressUtils.js'
+import {ModuleCache} from './CloudStorageCache.js'
 
 const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
     async (req: Request, res: any, next: (err?: any) => void) => {
@@ -14,12 +15,12 @@ const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: strin
             const firebaseAccessToken = req.get('x-firebase-access-token')
             const gitHubAccessToken = req.get('x-github-access-token')
 
-            checkData(gitRepoUrl, 'Git URL')
-            checkData(gitHubAccessToken, 'GitHub access token')
-            checkData(firebaseAccessToken, 'Google access token')
+            checkData(gitRepoUrl, 'Git URL', res)
+            checkData(gitHubAccessToken, 'GitHub access token', res)
+            checkData(firebaseAccessToken, 'Google access token', res)
 
             const firebaseProject: string | undefined = process.env.PROJECT_ID
-            checkData(firebaseProject, 'Firebase Project in PROJECT_ID env variable')
+            checkData(firebaseProject, 'Firebase Project in PROJECT_ID env variable', res)
 
             const deployTag = new Date().toISOString().substring(0, 19)
             const checkoutPath = path.join(localFilePath, 'deploy', deployTag)
@@ -36,8 +37,8 @@ const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: strin
         console.log('clear handler', req.url)
         try {
             const firebaseAccessToken: string = req.get('x-firebase-access-token')
-            checkData(firebaseAccessToken, 'Google access token')
-            await clearCache(localFilePath, moduleCache, firebaseAccessToken)
+            checkData(firebaseAccessToken, 'Google access token', res)
+            await clearCache(localFilePath, moduleCache)
             res.end()
         } catch (err) {
             next(err)

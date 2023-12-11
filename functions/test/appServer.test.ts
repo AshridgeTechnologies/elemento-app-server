@@ -4,9 +4,9 @@ import createAppServer from '../src/appServer'
 import * as os from 'os'
 import {type Server} from 'http'
 import * as fs from 'fs'
-import {type ModuleCache} from '../src/util'
 import axios from 'axios'
 import {serverAppCode} from './testUtil'
+import {ModuleCache} from '../src/CloudStorageCache'
 
 const runtimeImportPath = 'http://127.0.0.1:8000/lib'
 const createModuleCache = (): ModuleCache & {modules:any} => ({
@@ -17,16 +17,12 @@ const createModuleCache = (): ModuleCache & {modules:any} => ({
         }
         return Promise.resolve(false)
     },
-    storeWithEtag(path: string, contents: Buffer, _?: string): Promise<void> {
-        this.modules[path] = contents
-        return Promise.resolve()
-    },
     clear(accessToken: string) {
         this.modules = {}
         return Promise.resolve()
     },
     etag(_: string) { return undefined },
-    storeWithPermissions(path: string, contents: Buffer, accessToken: string) {
+    store(path: string, contents: Buffer, _?: string) {
         this.modules[path] = contents
         return Promise.resolve()
     }
@@ -63,8 +59,8 @@ test('app Server', async (t) => {
     t.beforeEach( async () => {
         localFilePath = await newModuleImportDir()
         moduleCache = createModuleCache()
-        await moduleCache.storeWithEtag(`${testVersion}/server/ServerApp1.mjs`, Buffer.from(serverAppCode), 'abc123');
-        await moduleCache.storeWithEtag(`${testVersion}/server/serverRuntime.cjs`, serverRuntimeBuffer, 'abc123');
+        await moduleCache.store(`${testVersion}/server/ServerApp1.mjs`, Buffer.from(serverAppCode), 'abc123');
+        await moduleCache.store(`${testVersion}/server/serverRuntime.cjs`, serverRuntimeBuffer, 'abc123');
         ({server, serverPort} = await makeAppServer(localFilePath, moduleCache))
     })
 

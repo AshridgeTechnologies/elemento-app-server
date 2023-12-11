@@ -1,5 +1,11 @@
 import {getStorage} from 'firebase-admin/storage'
-import {googleApiRequest, ModuleCache} from './util.js'
+
+export interface ModuleCache {
+    downloadToFile(path: string, localFilePath: string, logError?: boolean): Promise<boolean>
+    clear(prefix?: string): Promise<void>
+    etag(path: string): Promise<string | undefined>
+    store(path: string, contents: Buffer, etag?: string): Promise<void>
+}
 
 export class CloudStorageCache implements ModuleCache {
     constructor(private readonly bucketName?: string) {
@@ -24,7 +30,7 @@ export class CloudStorageCache implements ModuleCache {
         return response.metadata?.sourceEtag
     }
 
-    async storeWithEtag(path: string, contents: Buffer, etag: string): Promise<void> {
+    async store(path: string, contents: Buffer, etag?: string): Promise<void> {
         const file = this.file(path)
         await file.save(contents)
         if (etag) {
@@ -32,21 +38,9 @@ export class CloudStorageCache implements ModuleCache {
         }
     }
 
-    async storeWithPermissions(path: string, contents: Buffer, accessToken: string) {
-        const encodedPath = encodeURIComponent(this.cachePath(path))
-        await googleApiRequest('https://storage.googleapis.com',
-            `upload/storage/v1/b/${this.bucket().name}/o?uploadType=media&name=${encodedPath}`,
-            accessToken, 'POST', contents)
-    }
-
-    async clear(accessToken: string, prefix: string = ''): Promise<void> {
+    async clear(prefix?: string): Promise<void> {
         const [cacheFiles] = await this.bucket().getFiles({prefix: this.cachePath(prefix)})
-        await Promise.all(cacheFiles.map(f => {
-            const encodedPath = encodeURIComponent(f.name)
-            return googleApiRequest('https://storage.googleapis.com',
-                `storage/v1/b/${this.bucket().name}/o/${encodedPath}`,
-                accessToken, 'DELETE')
-        }))
+        await Promise.all(cacheFiles.map(f => f.delete()))
     }
 
     private bucket() {

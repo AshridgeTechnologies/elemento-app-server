@@ -69,3 +69,8 @@ resources:
 # Learn more in the docs:
 # https://firebase.google.com/docs/extensions/reference/extension-yaml#params-field
 params:
+  - param: PREVIEW_PASSWORD
+    label: Preview password
+    description: >-
+      Password to allow updating functions and files in the preview server
+    type: secret

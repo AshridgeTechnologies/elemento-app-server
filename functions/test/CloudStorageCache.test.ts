@@ -5,7 +5,7 @@ import * as os from 'os'
 import * as fs from 'fs'
 // @ts-ignore
 import admin from 'firebase-admin'
-import {clearDirectory, getAccessToken} from './testUtil'
+import {clearDirectory} from './testUtil'
 import {CloudStorageCache} from '../src/CloudStorageCache'
 
 const fileContent = 'some code'
@@ -25,15 +25,14 @@ test('app Server', async (t) => {
 
         const cache = new CloudStorageCache()
         await expect(cache.downloadToFile(fileUrl, downloadFilePath)).resolves.toBe(false)
-        await cache.storeWithEtag(fileUrl, fileContentBuf, 'abc123')
+        await cache.store(fileUrl, fileContentBuf, 'abc123')
         await expect(cache.downloadToFile(fileUrl, downloadFilePath, true)).resolves.toBe(true)
         const retrievedContent = await fs.promises.readFile(downloadFilePath, 'utf8')
         expect(retrievedContent).toBe(fileContent)
         await expect(cache.etag(fileUrl)).resolves.toBe('abc123')
     })
 
-    await t.test('CloudStorageCache saves files with permissions', async () => {
-        const firebaseAccessToken = await getAccessToken(serviceAccountKey)
+    await t.test('CloudStorageCache saves files', async () => {
         const fileUrl = `dir1/theFile.${Date.now()}.js`
         const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.1'
         await clearDirectory(downloadDir)
@@ -41,14 +40,13 @@ test('app Server', async (t) => {
 
         const cache = new CloudStorageCache()
         await expect(cache.downloadToFile(fileUrl, downloadFilePath)).resolves.toBe(false)
-        await cache.storeWithPermissions(fileUrl, fileContentBuf, firebaseAccessToken)
+        await cache.store(fileUrl, fileContentBuf)
         await expect(cache.downloadToFile(fileUrl, downloadFilePath, true)).resolves.toBe(true)
         const retrievedContent = await fs.promises.readFile(downloadFilePath, 'utf8')
         expect(retrievedContent).toBe(fileContent)
     })
 
     await t.test('CloudStorageCache saves and retrieves etag if file exists and has sourceEtag', async () => {
-        const fileUrl1 = `dir1/theFile.${Date.now()}.js`
         const fileUrl2 = `dir2/theFile.${Date.now()}.js`
         const nonExistentFileUrl = `dir3/theFile.${Date.now()}.js`
         const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.2'
@@ -56,13 +54,12 @@ test('app Server', async (t) => {
 
         const cache = new CloudStorageCache()
         const etag = 'etag99'
-        await cache.storeWithEtag(fileUrl2, fileContentBuf, etag)
+        await cache.store(fileUrl2, fileContentBuf, etag)
         await expect(cache.etag(fileUrl2)).resolves.toBe(etag)
         await expect(cache.etag(nonExistentFileUrl)).resolves.toBe(undefined)
     })
 
-    await t.test('CloudStorageCache clears files with permissions', async () => {
-        const firebaseAccessToken = await getAccessToken(serviceAccountKey)
+    await t.test('CloudStorageCache clears files', async () => {
         const fileUrl1 = `dir1/theFile.${Date.now()}.js`
         const fileUrl2 = `dir2/theFile.${Date.now()}.js`
         const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.3'
@@ -71,14 +68,14 @@ test('app Server', async (t) => {
         const downloadFilePath = downloadDir + '/' + 'retrievedFile.txt'
 
         const cache = new CloudStorageCache()
-        await cache.storeWithEtag(fileUrl1, fileContentBuf, 'abc123')
-        await cache.storeWithEtag(fileUrl2, fileContentBuf, 'abc123')
+        await cache.store(fileUrl1, fileContentBuf, 'abc123')
+        await cache.store(fileUrl2, fileContentBuf, 'abc123')
 
-        await cache.clear(firebaseAccessToken, 'dir1')
+        await cache.clear('dir1')
         await expect(cache.downloadToFile(fileUrl1, downloadFilePath)).resolves.toBe(false)
         await expect(cache.downloadToFile(fileUrl2, downloadFilePath, true)).resolves.toBe(true)
 
-        await cache.clear(firebaseAccessToken, 'dir2')
+        await cache.clear('dir2')
         await expect(cache.downloadToFile(fileUrl2, downloadFilePath)).resolves.toBe(false)
     })
 })
