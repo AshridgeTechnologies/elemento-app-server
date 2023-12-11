@@ -41,7 +41,7 @@ async function clearWebApps(firebaseAccessToken: string) {
 test('admin Server', async (t) => {
 
     let localFilePath: string
-    let moduleCache = new CloudStorageCache()
+    let moduleCache = new CloudStorageCache('deployCache')
     let gitHubAccessToken: string, serviceAccountKey: string, firebaseAccessToken: string, headers: HeadersInit
 
     let server: Server | undefined, serverPort: number | undefined

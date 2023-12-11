@@ -21,7 +21,7 @@ test('admin util', async (t) => {
     console.log('deployFilesPath', checkoutPath)
     await fs.promises.rm(checkoutPath, {force: true, recursive: true}).then( ()=> fs.promises.mkdir(checkoutPath, {recursive: true}))
 
-    const moduleCache = new CloudStorageCache()
+    const moduleCache = new CloudStorageCache('deployCache')
     await t.test('deploy to hosting', async () => {
         await deployToHosting({
             gitRepoUrl: 'https://github.com/rileydog16/Elemento-Test-2',

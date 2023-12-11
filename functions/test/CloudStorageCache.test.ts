@@ -7,9 +7,11 @@ import * as fs from 'fs'
 import admin from 'firebase-admin'
 import {clearDirectory} from './testUtil'
 import {CloudStorageCache} from '../src/CloudStorageCache'
+import {getStorage} from 'firebase-admin/storage'
 
 const fileContent = 'some code'
 const fileContentBuf = Buffer.from(fileContent, 'utf8')
+const testCacheRoot = 'testCache'
 
 const bucketName = 'elemento-unit-test.appspot.com'
 
@@ -23,7 +25,7 @@ test('app Server', async (t) => {
         await clearDirectory(downloadDir)
         const downloadFilePath = downloadDir + '/' + 'retrievedFile.txt'
 
-        const cache = new CloudStorageCache()
+        const cache = new CloudStorageCache(testCacheRoot)
         await expect(cache.downloadToFile(fileUrl, downloadFilePath)).resolves.toBe(false)
         await cache.store(fileUrl, fileContentBuf, 'abc123')
         await expect(cache.downloadToFile(fileUrl, downloadFilePath, true)).resolves.toBe(true)
@@ -38,7 +40,7 @@ test('app Server', async (t) => {
         await clearDirectory(downloadDir)
         const downloadFilePath = downloadDir + '/' + 'retrievedFile.txt'
 
-        const cache = new CloudStorageCache()
+        const cache = new CloudStorageCache(testCacheRoot)
         await expect(cache.downloadToFile(fileUrl, downloadFilePath)).resolves.toBe(false)
         await cache.store(fileUrl, fileContentBuf)
         await expect(cache.downloadToFile(fileUrl, downloadFilePath, true)).resolves.toBe(true)
@@ -52,30 +54,30 @@ test('app Server', async (t) => {
         const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.2'
         await clearDirectory(downloadDir)
 
-        const cache = new CloudStorageCache()
+        const cache = new CloudStorageCache(testCacheRoot)
         const etag = 'etag99'
         await cache.store(fileUrl2, fileContentBuf, etag)
         await expect(cache.etag(fileUrl2)).resolves.toBe(etag)
         await expect(cache.etag(nonExistentFileUrl)).resolves.toBe(undefined)
     })
 
-    await t.test('CloudStorageCache clears files', async () => {
+    await t.test('CloudStorageCache clears files under cache root', async () => {
         const fileUrl1 = `dir1/theFile.${Date.now()}.js`
         const fileUrl2 = `dir2/theFile.${Date.now()}.js`
+        const otherFile = getStorage().bucket().file(testCacheRoot + '_not' + '/'+ 'otherFile.txt')
+        await otherFile.save('other file')
         const downloadDir = os.tmpdir() + '/' + 'CloudStorageCache.test.3'
         await fs.promises.rm(downloadDir, {force: true, recursive: true})
         await fs.promises.mkdir(downloadDir)
         const downloadFilePath = downloadDir + '/' + 'retrievedFile.txt'
 
-        const cache = new CloudStorageCache()
+        const cache = new CloudStorageCache(testCacheRoot)
         await cache.store(fileUrl1, fileContentBuf, 'abc123')
         await cache.store(fileUrl2, fileContentBuf, 'abc123')
 
-        await cache.clear('dir1')
+        await cache.clear()
         await expect(cache.downloadToFile(fileUrl1, downloadFilePath)).resolves.toBe(false)
-        await expect(cache.downloadToFile(fileUrl2, downloadFilePath, true)).resolves.toBe(true)
-
-        await cache.clear('dir2')
         await expect(cache.downloadToFile(fileUrl2, downloadFilePath)).resolves.toBe(false)
+        await expect(otherFile.exists()).resolves.toStrictEqual([true])
     })
 })

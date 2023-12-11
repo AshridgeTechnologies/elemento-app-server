@@ -53,9 +53,8 @@ export async function putIntoCacheAndFile(cachePath: string, localPath: string, 
     ])
 }
 
-export function clearCache(localPath: string, cache: ModuleCache, prefix?: string) {
-    const dirToClear = path.join(localPath, prefix ?? '')
-    return cache.clear(prefix).then( ()=> rmdir(dirToClear))
+export function clearCache(localPath: string, cache: ModuleCache) {
+    return cache.clear().then( ()=> rmdir(localPath))
 }
 
 

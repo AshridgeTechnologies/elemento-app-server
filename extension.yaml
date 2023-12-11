@@ -10,7 +10,7 @@ displayName: Elemento App Server
 
 # Brief description of the task your extension performs (~1 sentence)
 description: >-
-  Runs Elemento server apps and deploy client apps to hosting.
+  Runs Elemento server apps and deploys client apps to hosting.
 
 license: Apache-2.0  # https://spdx.org/licenses/
 
@@ -73,4 +73,5 @@ params:
     label: Preview password
     description: >-
       Password to allow updating functions and files in the preview server
-    type: secret
+    type: string
+    required: true

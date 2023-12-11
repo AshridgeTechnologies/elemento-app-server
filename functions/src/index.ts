@@ -9,15 +9,17 @@ import {CloudStorageCache} from './CloudStorageCache.js'
 initializeApp()
 
 const localFilePath = os.tmpdir() + '/' + 'appServer'
-const moduleCache = new CloudStorageCache()
+const previewLocalFilePath = os.tmpdir() + '/' + 'previewServer'
+const deployCacheRoot = 'deployCache'
+const previewCacheRoot = 'previewCache'
 
-const theAppServer = createAppServer({localFilePath, moduleCache})
+const theAppServer = createAppServer({localFilePath, moduleCache: new CloudStorageCache(deployCacheRoot)})
 export const appServer = functions.https.onRequest(theAppServer)
 
-const theAdminServer = createAdminServer({localFilePath, moduleCache})
+const theAdminServer = createAdminServer({localFilePath, moduleCache: new CloudStorageCache(deployCacheRoot)})
 export const adminServer = functions.https.onRequest(theAdminServer)
 
-const thePreviewServer = createPreviewServer({localFilePath, moduleCache})
+const thePreviewServer = createPreviewServer({localFilePath: previewLocalFilePath, moduleCache: new CloudStorageCache(previewCacheRoot)})
 export const previewServer = functions.https.onRequest(thePreviewServer)
     // properties controlled by extension.yaml
 

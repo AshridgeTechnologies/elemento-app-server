@@ -2,13 +2,14 @@ import {getStorage} from 'firebase-admin/storage'
 
 export interface ModuleCache {
     downloadToFile(path: string, localFilePath: string, logError?: boolean): Promise<boolean>
-    clear(prefix?: string): Promise<void>
+
+    clear(): Promise<void>
     etag(path: string): Promise<string | undefined>
     store(path: string, contents: Buffer, etag?: string): Promise<void>
 }
 
 export class CloudStorageCache implements ModuleCache {
-    constructor(private readonly bucketName?: string) {
+    constructor(private readonly cacheRoot: string, private readonly bucketName?: string) {
     }
 
     downloadToFile(path: string, localFilePath: string, logError = false): Promise<boolean> {
@@ -38,8 +39,8 @@ export class CloudStorageCache implements ModuleCache {
         }
     }
 
-    async clear(prefix?: string): Promise<void> {
-        const [cacheFiles] = await this.bucket().getFiles({prefix: this.cachePath(prefix)})
+    async clear(): Promise<void> {
+        const [cacheFiles] = await this.bucket().getFiles({prefix: this.cacheRoot + '/'})
         await Promise.all(cacheFiles.map(f => f.delete()))
     }
 
@@ -52,6 +53,6 @@ export class CloudStorageCache implements ModuleCache {
     }
 
     private cachePath(path: string) {
-        return 'deployCache' + '/' + path.replace(/^https?:\/\//, '')
+        return this.cacheRoot + '/' + path.replace(/^https?:\/\//, '')
     }
 }

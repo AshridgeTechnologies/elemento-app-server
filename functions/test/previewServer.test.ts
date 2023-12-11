@@ -3,12 +3,13 @@ import {expect} from 'expect'
 import {type Server} from 'http'
 import * as fs from 'fs'
 import {fileExists, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from '../src/util'
-import {getAccessToken, newTestDir, serverAppCode} from './testUtil'
+import {newTestDir, serverAppCode} from './testUtil'
 // @ts-ignore
 import admin from 'firebase-admin'
 import createPreviewServer from '../src/previewServer'
 import {CloudStorageCache, ModuleCache} from '../src/CloudStorageCache'
 import * as dotenv from 'dotenv'
+import {getStorage} from 'firebase-admin/storage'
 
 async function makePreviewServer(localFilePath: string, moduleCache: ModuleCache) {
     const serverPort = 7656
@@ -27,8 +28,8 @@ const previewPassword = 'pass123'
 test('preview Server', async (t) => {
 
     let localFilePath: string
-    let moduleCache = new CloudStorageCache()
-    let serviceAccountKey: string, firebaseAccessToken: string
+    let moduleCache = new CloudStorageCache('previewCache')
+    let serviceAccountKey: string
 
     let server: Server | undefined, serverPort: number | undefined
     const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
@@ -37,8 +38,7 @@ test('preview Server', async (t) => {
         dotenv.populate(process.env, {PREVIEW_PASSWORD: previewPassword})
         localFilePath = await newTestDir();
         serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
-        firebaseAccessToken = await getAccessToken(serviceAccountKey);
-        await moduleCache.clear('preview');
+        await moduleCache.clear();
         ({server, serverPort} = await makePreviewServer(localFilePath, moduleCache))
     })
 
@@ -118,13 +118,16 @@ test('preview Server', async (t) => {
 
         await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', moduleCache, Buffer.from('file 1 contents'))
         await putIntoCacheAndFile('deploy1/file2.txt', localFilePath + '/serverFiles/deploy1/file2.txt', moduleCache, Buffer.from('file 2 contents'))
+        const otherFile = getStorage().bucket().file('previewCache' + '_not' + '/'+ 'otherFile.txt')
+        await otherFile.save('other file')
         try {
             const response = await fetch(clearPreviewUrl, {method: 'POST', headers: previewHeaders})
             expect(response.ok).toBe(true)
-            await expect(moduleCache.exists(`deploy1/file2.txt`)).resolves.toBe(true)
+            await expect(moduleCache.exists(`deploy1/file2.txt`)).resolves.toBe(false)
             await expect(moduleCache.exists(`preview/file1.txt`)).resolves.toBe(false)
-            await expect(fileExists(localFilePath + '/' + 'serverFiles/deploy1/file2.txt')).resolves.toBe(true)
+            await expect(fileExists(localFilePath + '/' + 'serverFiles/deploy1/file2.txt')).resolves.toBe(false)
             await expect(fileExists(localFilePath + '/' + 'serverFiles/preview/file1.txt')).resolves.toBe(false)
+            await expect(otherFile.exists()).resolves.toStrictEqual([true])
         }  finally {
             await stopServer()
         }

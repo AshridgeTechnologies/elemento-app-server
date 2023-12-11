@@ -143,7 +143,7 @@ const createClearHandler = ({localFilePath, moduleCache}: {localFilePath: string
 
         const elementoFilesPath = path.join(localFilePath, 'serverFiles')
         try {
-            await clearCache(elementoFilesPath, moduleCache, 'preview')
+            await clearCache(elementoFilesPath, moduleCache)
             res.end()
         } catch (err) {
             next(err)
