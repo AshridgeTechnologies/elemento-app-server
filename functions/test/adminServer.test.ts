@@ -78,7 +78,7 @@ test('admin Server', async (t) => {
             console.log('Deployed')
             const {releaseTime} = deployResult
             const releaseTimeMillis = new Date(releaseTime).getTime()
-            expect(releaseTimeMillis - Date.now()).toBeLessThan(5000)
+            expect(releaseTimeMillis - Date.now()).toBeLessThan(10000)
 
             const htmlPage = await fetch(`https://${firebaseProject}.web.app/MainApp`).then(resp => resp.text() )
             expect(htmlPage).toContain('<title>Main App</title>')

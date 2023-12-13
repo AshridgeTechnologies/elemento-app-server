@@ -208,13 +208,30 @@ export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepo
         .then( files => files.filter( f => f.isDirectory() && f.name !== ASSET_DIR).map( f => f.name ) )
     const spaRewrites = appDirs.map( dir =>  ({glob: `/${dir}/**`, path: `/${dir}/index.html`}))
     const rewrites = [...serverAppRewrites, ...spaRewrites,]
-    console.log('rewrites', JSON.stringify(rewrites))
+    const headers = [
+            {
+                glob: "**/**",
+                headers: {
+                    "Cache-Control": "public,max-age=0,must-revalidate"
+                }
+            }]
+
+    const urlConfig = {
+        cleanUrls: true,
+        trailingSlash: false
+    }
+    const hostingConfig = {
+        rewrites,
+        headers,
+        // ...urlConfig
+    }
+
+    console.log('hostingConfig', JSON.stringify(hostingConfig))
+
     const patchResult = await hostingRequest(`${version.name}?update_mask=status,config`, firebaseAccessToken, 'PATCH',
         {
             status: 'FINALIZED',
-            config: {
-                rewrites
-            }
+            config: hostingConfig
         })
 
     console.log('patch', patchResult)
