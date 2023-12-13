@@ -24,6 +24,10 @@ const serviceAccountKeyPath = 'private/elemento-hosting-test-firebase-adminsdk-7
 const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
 admin.initializeApp({credential: admin.credential.cert(serviceAccountKey), storageBucket: bucketName})
 const previewPassword = 'pass123'
+const validPreviewHeaders = {
+    'Content-Type': 'text/plain',
+    'x-preview-password': previewPassword,
+}
 
 test('preview Server', async (t) => {
 
@@ -45,11 +49,6 @@ test('preview Server', async (t) => {
     t.afterEach(stopServer)
 
     await t.test('deploys server app preview and updates it and serves result', async () => {
-
-        const previewHeaders = {
-            'Content-Type': 'text/plain',
-            'x-preview-password': previewPassword,
-        }
         const putPreviewUrl = `http://localhost:${serverPort}/preview`
         const getPreviewUrl = `http://localhost:${serverPort}/capi/preview`
         const deployTime = Date.now()
@@ -65,9 +64,8 @@ test('preview Server', async (t) => {
             return await fs.promises.readFile(tempFilePath, 'utf8')
         }
 
-
         try {
-            await fetch(putPreviewUrl, {method: 'PUT', headers: previewHeaders, body: body1})
+            await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
 
             console.log('Preview deployed')
             expect(await cachedFileContents(`preview/server/ServerApp1.mjs`)).toBe(serverAppWithTotalFunction)
@@ -84,10 +82,37 @@ test('preview Server', async (t) => {
 
             const serverAppWithDifference = serverAppCode.replace('//Differencecomment', '').replace( '// time', '// time ' + deployTime)
             const body2 = `//// File: ${serverAppPath}\n${serverAppWithDifference}\n//// End of file`
-            await fetch(putPreviewUrl, {method: 'PUT', headers: previewHeaders, body: body2})
+            await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body2})
             const resp = await fetch(`${getPreviewUrl}/ServerApp1/Difference?x=20&y=30`)
             const differenceResult = await resp.json()
             expect(differenceResult).toBe(-10)
+        } finally {
+            await stopServer()
+        }
+    })
+
+    await t.test('downloads runtime again after two clear and upload cycles in succession', async () => {
+        const putPreviewUrl = `http://localhost:${serverPort}/preview`
+        const clearPreviewUrl = `http://localhost:${serverPort}/preview/clear`
+        const serverAppPath = 'server/ServerApp1.mjs'
+        const body1 = `//// File: ${serverAppPath}\n${serverAppCode}\n//// End of file\n`
+
+        let seq = 1
+        async function cachedFileContents(path: string) {
+            const tempFilePath = `${localFilePath}/temp${seq++}`
+            await moduleCache.downloadToFile(path, tempFilePath)
+            return await fs.promises.readFile(tempFilePath, 'utf8')
+        }
+
+        try {
+            await fetch(clearPreviewUrl, {method: 'POST', headers: validPreviewHeaders})
+            await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
+            await fetch(clearPreviewUrl, {method: 'POST', headers: validPreviewHeaders})
+            await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
+
+            console.log('Preview deployed')
+            expect(await cachedFileContents(`preview/server/ServerApp1.mjs`)).toBe(serverAppCode)
+            await expect(moduleCache.exists(`preview/server/serverRuntime.cjs`)).resolves.toBe(true)
         } finally {
             await stopServer()
         }
@@ -109,11 +134,7 @@ test('preview Server', async (t) => {
         }
     })
 
-    await t.test('clears preview cache but leaves other areas', async () => {
-        const previewHeaders = {
-            'Content-Type': 'text/plain',
-            'x-preview-password': previewPassword,
-        }
+    await t.test('clears all of preview cache', async () => {
         const clearPreviewUrl = `http://localhost:${serverPort}/preview/clear`
 
         await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', moduleCache, Buffer.from('file 1 contents'))
@@ -121,7 +142,7 @@ test('preview Server', async (t) => {
         const otherFile = getStorage().bucket().file('previewCache' + '_not' + '/'+ 'otherFile.txt')
         await otherFile.save('other file')
         try {
-            const response = await fetch(clearPreviewUrl, {method: 'POST', headers: previewHeaders})
+            const response = await fetch(clearPreviewUrl, {method: 'POST', headers: validPreviewHeaders})
             expect(response.ok).toBe(true)
             await expect(moduleCache.exists(`deploy1/file2.txt`)).resolves.toBe(false)
             await expect(moduleCache.exists(`preview/file1.txt`)).resolves.toBe(false)

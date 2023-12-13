@@ -53,7 +53,7 @@ export default function createAdminServer(props: {localFilePath: string, moduleC
     const app = express()
     app.use(logCall)
     app.use(cors({
-        origin: [elementoHost, 'http://localhost:8000'],
+        origin: [elementoHost, 'http://localhost:8000', 'http://localhost:8100'],
         methods: ['POST'],
         preflightContinue: false
     }))

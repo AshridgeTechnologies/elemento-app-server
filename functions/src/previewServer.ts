@@ -1,6 +1,6 @@
 import {AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
 import path from 'path'
-import {checkData, clearCache, elementoHost, getFromCache, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from './util.js'
+import {clearCache, elementoHost, getFromCache, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from './util.js'
 import {AppServerProperties} from './appServer.js'
 import fs from 'fs'
 import axios from 'axios'
@@ -144,6 +144,7 @@ const createClearHandler = ({localFilePath, moduleCache}: {localFilePath: string
         const elementoFilesPath = path.join(localFilePath, 'serverFiles')
         try {
             await clearCache(elementoFilesPath, moduleCache)
+            lastModifiedCheckTime = 0
             res.end()
         } catch (err) {
             next(err)
@@ -160,7 +161,7 @@ export default function createPreviewServer(props: {localFilePath: string, modul
     const app = express()
     app.use(logCall)
     app.use(cors({
-        origin: [elementoHost, 'http://localhost:8000'],
+        origin: [elementoHost, 'http://localhost:8000', 'http://localhost:8100'],
         methods: ['PUT', 'POST'],
         preflightContinue: false
     }))
