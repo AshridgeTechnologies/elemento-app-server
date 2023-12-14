@@ -167,7 +167,8 @@ export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepo
     const versionData = {deployTime, commitId}
     console.log('commit id', commitId, 'deployTime', deployTime)
 
-    const clientDirPath = `${checkoutPath}/dist/client`
+    const distDirPath = `${checkoutPath}/dist`
+    const clientDirPath = `${distDirPath}/client`
     await fs.promises.writeFile(`${clientDirPath}/version`, JSON.stringify(versionData, null, 2), 'utf8')
     await fs.promises.writeFile(`${clientDirPath}/firebaseConfig.json`, JSON.stringify(config, null, 2), 'utf8')
 
@@ -207,7 +208,21 @@ export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepo
     const appDirs = await fs.promises.readdir(clientDirPath, {withFileTypes: true})
         .then( files => files.filter( f => f.isDirectory() && f.name !== ASSET_DIR).map( f => f.name ) )
     const spaRewrites = appDirs.map( dir =>  ({glob: `/${dir}/**`, path: `/${dir}/index.html`}))
-    const rewrites = [...serverAppRewrites, ...spaRewrites,]
+    const projectInfoFilePath = `${distDirPath}/projectInfo.json`
+
+    const getDefaultAppRedirects = async () => {
+        if (await fileExists(projectInfoFilePath)) {
+            const projectInfo = JSON.parse(await fs.promises.readFile(projectInfoFilePath, 'utf8'))
+            const defaultAppDir = projectInfo.apps?.[0]
+            if (defaultAppDir) {
+                return [{glob: `/`, statusCode: 301, location: `/${defaultAppDir}`}]
+            }
+        }
+        return []
+    }
+    const defaultAppRedirects = await getDefaultAppRedirects()
+    const rewrites = [...serverAppRewrites, ...spaRewrites]
+    const redirects = [...defaultAppRedirects]
     const headers = [
             {
                 glob: "**/**",
@@ -217,13 +232,13 @@ export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepo
             }]
 
     const urlConfig = {
-        cleanUrls: true,
-        trailingSlash: false
+        trailingSlashBehavior: "REMOVE"
     }
     const hostingConfig = {
         rewrites,
+        redirects,
         headers,
-        // ...urlConfig
+        ...urlConfig
     }
 
     console.log('hostingConfig', JSON.stringify(hostingConfig))
