@@ -7,16 +7,31 @@ Learn more about writing a PREINSTALL.md file in the docs:
 https://firebase.google.com/docs/extensions/publishers/user-documentation#writing-preinstall
 -->
 
-Use this extension to send a friendly greeting.
+# Elemento App Server
 
-When triggered by an HTTP request, this extension responds with your specified friendly greeting.
+This extension provides hosting for apps created with the [Elemento](https://elemento.online) low code tool.
 
-<!-- We recommend keeping the following section to explain how billing for Firebase Extensions works -->
+## What it does
+It installs three Firebase functions that provide the following services in the Firebase project where it is installed:
+
+### Admin server
+This function deploys (publishes) Elemento projects from GitHub to the Hosting of the Firebase project.
+The projects must have been created with the Elemento Studio and saved in GitHub
+
+### App server
+This function runs the Server Apps in the deployed Elemento project, for use by normal clients using the app.
+
+### Preview server
+This function runs preview versions of the Server Apps, for use by the Preview window in the Elemento Studio.  
+It allows the Studio to immediately update the Server Apps after every change.
+
+## Before installing
+You will need to choose a password for the Preview server, which you will enter in the extension configuration.
+
+
 # Billing
+To install an extension, your project must be on the [Blaze (pay as you go) plan](https://firebase.google.com/pricing)
 
-This extension uses other Firebase or Google Cloud Platform services which may have associated charges:
-
-<!-- List all products the extension interacts with -->
-- Cloud Functions
-
-When you use Firebase Extensions, you're only charged for the underlying resources that you use. A paid-tier billing plan is only required if the extension uses a service that requires a paid-tier plan, for example calling to a Google Cloud Platform API or making outbound network requests to non-Google services. All Firebase services offer a free tier of usage. [Learn more about Firebase billing.](https://firebase.google.com/pricing)
+- This extension uses other Firebase and Google Cloud Platform services, which have associated charges if you exceed the service’s no-cost tier:
+- Cloud Storage
+- Cloud Functions (Node.js 18+ runtime. [See FAQs](https://firebase.google.com/support/faq#extensions-pricing))

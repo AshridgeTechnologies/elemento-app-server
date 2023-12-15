@@ -2,7 +2,7 @@
 # https://firebase.google.com/docs/extensions/reference/extension-yaml
 
 name: elemento-app-server  # Identifier for your extension
-version: 0.0.1  # Follow semver versioning
+version: 0.1.1  # Follow semver versioning
 specVersion: v1beta  # Version of the Firebase Extensions specification
 
 # Friendly display name for your extension (~3-5 words)
@@ -15,7 +15,12 @@ description: >-
 license: Apache-2.0  # https://spdx.org/licenses/
 
 # Public URL for the source code of your extension
-sourceUrl: https://github.com/xxx/xxx/tree/master/templates/extensions
+sourceUrl: https://github.com/AshridgeTechnologies/elemento-app-server
+
+author:
+  authorName: Ashridge Technologies Ltd
+  email: info@ashridgetech.com
+  url: https://ashridgetech.com/
 
 # In an `apis` field, list any Google APIs (like Cloud Translation, BigQuery, etc.)
 # required for your extension to operate.
@@ -39,7 +44,7 @@ resources:
   - name: appServer
     type: firebaseextensions.v1beta.function
     description: >-
-      HTTP request-triggered function that loads an Elemento app to handle the request
+      HTTP request-triggered function that loads an Elemento Server app to handle the request
     properties:
       location: "europe-west2"
       httpsTrigger: {}
@@ -48,7 +53,7 @@ resources:
   - name: adminServer
     type: firebaseextensions.v1beta.function
     description: >-
-      HTTP request-triggered function that does admin operations on the site
+      HTTP request-triggered function that does deployment and other admin operations on the site
     properties:
       location: "europe-west2"
       httpsTrigger: {}
@@ -58,7 +63,7 @@ resources:
   - name: previewServer
     type: firebaseextensions.v1beta.function
     description: >-
-      HTTP request-triggered function that handles requests to preview versions of an Elemento app
+      HTTP request-triggered function that handles requests to preview versions of an Elemento Server app
     properties:
       location: "europe-west2"
       httpsTrigger: {}
