@@ -2,14 +2,9 @@
   "name": "elemento-app-server",
   "version": "1.0.0",
   "dependencies": {
-    "cors": "^2.8.5",
     "firebase-tools": "^12.2.1"
   },
   "license": "Apache-2.0",
   "devDependencies": {
-    "@types/node": "^20.8.10",
-    "dotenv": "^16.3.1",
-    "ts-lib": "^0.0.5",
-    "tsx": "^4.0.0"
   }
 }
