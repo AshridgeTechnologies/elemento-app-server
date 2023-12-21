@@ -42,6 +42,7 @@ test('admin Server', async (t) => {
 
     let localFilePath: string
     let moduleCache = new CloudStorageCache('deployCache')
+    let settingsStore = new CloudStorageCache('settings')
     let gitHubAccessToken: string, serviceAccountKey: string, firebaseAccessToken: string, headers: HeadersInit
 
     let server: Server | undefined, serverPort: number | undefined
@@ -55,6 +56,8 @@ test('admin Server', async (t) => {
         dotenv.populate(process.env, {PROJECT_ID: firebaseProject})
         expect(process.env.PROJECT_ID).toBe(firebaseProject)
         localFilePath = await newTestDir();
+        await moduleCache.clear()
+        await settingsStore.clear()
         gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1-2RepoToken_finegrained.txt', 'utf8')
         serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
         firebaseAccessToken = await getAccessToken(serviceAccountKey);
@@ -63,10 +66,41 @@ test('admin Server', async (t) => {
             'x-firebase-access-token': firebaseAccessToken,
             'X-GitHub-Access-Token': gitHubAccessToken,
         });
-        ({server, serverPort} = await makeAdminServer(localFilePath, moduleCache))
+        ({server, serverPort} = await makeAdminServer(localFilePath, moduleCache, settingsStore))
     })
 
     t.afterEach(stopServer)
+
+    await t.test('setup initialises firebase project', { skip: false }, async () => {
+        await clearWebApps(firebaseAccessToken)
+
+        const setupUrl = `http://localhost:${serverPort}/setup`
+        const previewPassword = 'pass' + Date.now()
+        const settings = {
+            previewPassword
+        }
+        const headers = ({
+            'Content-Type': 'application/json',
+            'x-firebase-access-token': firebaseAccessToken,
+        })
+
+        try {
+            const setupResult = await fetch(setupUrl, {method: 'POST', headers, body: JSON.stringify(settings)})
+            expect(setupResult.status).toBe(200)
+            console.log('Settings updated')
+
+            const tempFilePath = `${localFilePath}/temp1`
+            await settingsStore.downloadToFile(`settings.json`, tempFilePath)
+            const retrievedSettings = await fs.promises.readFile(tempFilePath, 'utf8').then(JSON.parse)
+            expect(retrievedSettings.previewPassword).toBe(previewPassword)
+            await settingsStore.downloadToFile(`firebaseConfig.json`, tempFilePath)
+            const retrievedConfig = await fs.promises.readFile(tempFilePath, 'utf8').then(JSON.parse)
+            expect(retrievedConfig.projectId).toBe(firebaseProject)
+            expect(retrievedConfig.appId).toContain(':web:')
+
+        } finally {
+        }
+    })
 
     await t.test('deploys client-only project from GitHub', { skip: false }, async () => {
 
@@ -137,5 +171,7 @@ test('admin Server', async (t) => {
             await stopServer()
         }
     })
+
+
 
 })

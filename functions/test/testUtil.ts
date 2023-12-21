@@ -96,9 +96,9 @@ export async function newTestDir() {
     return localFilePath
 }
 
-export async function makeAdminServer(localFilePath: string, moduleCache: ModuleCache) {
+export async function makeAdminServer(localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache) {
     const serverPort = 7655
-    const theAppServer = await createAdminServer({localFilePath, moduleCache})
+    const theAppServer = await createAdminServer({localFilePath, moduleCache, settingsStore})
     const server = theAppServer.listen(7655)
     return {serverPort, server}
 }

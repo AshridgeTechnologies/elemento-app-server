@@ -13,6 +13,10 @@ const ASSET_DIR = 'files'
 const firebaseRootUrl = `https://firebase.googleapis.com/v1beta1`
 const hostingRootUrl = `https://firebasehosting.googleapis.com/v1beta1`
 
+export type ProjectSettings = {
+    previewPassword: string
+}
+
 export const wait = (time: number): Promise<void> => new Promise(resolve => setTimeout(resolve, time))
 
 const hostingRequest = (path: string, accessToken: string, method: string = 'GET', data?: object) => googleApiRequest(hostingRootUrl, path, accessToken, method, data)
@@ -83,7 +87,7 @@ const files =  async (dir: string): Promise<{[path: string] : {filePath: string,
     return Object.fromEntries(fullFileEntries.map( f => [f.filePath, f]))
 }
 
-async function deployServerFiles({gitRepoUrl, commitId, deployTime, checkoutPath, moduleCache, firebaseAccessToken}:
+async function deployServerFiles({gitRepoUrl, commitId, deployTime, checkoutPath, moduleCache}:
                                      {gitRepoUrl: string, commitId: string, deployTime: string, checkoutPath: string, moduleCache: ModuleCache, firebaseAccessToken: string}) {
     const storeInCache = async (pathInCache: string, fileBuffer: Buffer) => {
         console.log('Storing in cache', pathInCache)
@@ -140,6 +144,21 @@ async function getFirebaseConfig(firebaseProject: string, firebaseAccessToken: s
     }
 
     return await firebaseRequest(`projects/${firebaseProject}/webApps/${app.appId}/config`, firebaseAccessToken)
+}
+
+function bufferFromJson(json: object) {
+    return Buffer.from(JSON.stringify(json, null, 2), 'utf8')
+}
+
+export async function setupProject({firebaseProject, firebaseAccessToken, settingsStore, settings}: {
+    firebaseProject: string,
+    firebaseAccessToken: string,
+    settingsStore: ModuleCache,
+    settings: ProjectSettings
+}) {
+    const config = await getFirebaseConfig(firebaseProject, firebaseAccessToken)
+    await settingsStore.store('firebaseConfig.json', bufferFromJson(config))
+    await settingsStore.store('settings.json', bufferFromJson(settings))
 }
 
 const usernameOf = (url: string) => new URL(url).pathname.substring(1).split('/')[0]

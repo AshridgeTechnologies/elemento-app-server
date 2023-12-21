@@ -12,11 +12,12 @@ const localFilePath = os.tmpdir() + '/' + 'appServer'
 const previewLocalFilePath = os.tmpdir() + '/' + 'previewServer'
 const deployCacheRoot = 'deployCache'
 const previewCacheRoot = 'previewCache'
+const settingsRoot = 'settings'
 
 const theAppServer = createAppServer({localFilePath, moduleCache: new CloudStorageCache(deployCacheRoot)})
 export const appServer = functions.https.onRequest(theAppServer)
 
-const theAdminServer = createAdminServer({localFilePath, moduleCache: new CloudStorageCache(deployCacheRoot)})
+const theAdminServer = createAdminServer({localFilePath, moduleCache: new CloudStorageCache(deployCacheRoot), settingsStore: new CloudStorageCache(settingsRoot)})
 export const adminServer = functions.https.onRequest(theAdminServer)
 
 const thePreviewServer = createPreviewServer({localFilePath: previewLocalFilePath, moduleCache: new CloudStorageCache(previewCacheRoot)})

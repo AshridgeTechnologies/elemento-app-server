@@ -1,6 +1,6 @@
 import express, {Request} from 'express'
 import path from 'path'
-import {deployToHosting} from './adminUtil.js'
+import {deployToHosting, setupProject} from './adminUtil.js'
 import {checkData, clearCache, elementoHost} from './util.js'
 import cors from 'cors'
 import {errorHandler, logCall} from './expressUtils.js'
@@ -32,7 +32,7 @@ const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: strin
         }
     }
 
-    const createClearHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
+const createClearHandler = ({localFilePath, moduleCache}: { localFilePath: string, moduleCache: ModuleCache }) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('clear handler', req.url)
         try {
@@ -45,10 +45,27 @@ const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: strin
         }
     }
 
-export default function createAdminServer(props: {localFilePath: string, moduleCache: ModuleCache}) {
+const createSetupHandler = ({settingsStore}: { settingsStore: ModuleCache }) =>
+    async (req: any, res: any, next: (err?: any) => void) => {
+        console.log('setup handler', req.url)
+        try {
+            const settings = req.body
+            const firebaseAccessToken: string = req.get('x-firebase-access-token')
+            checkData(firebaseAccessToken, 'Google access token', res)
+            const firebaseProject: string | undefined = process.env.PROJECT_ID
+            checkData(firebaseProject, 'Firebase Project in PROJECT_ID env variable', res)
+            await setupProject({firebaseAccessToken, firebaseProject: firebaseProject!, settingsStore, settings})
+            res.end()
+        } catch (err) {
+            next(err)
+        }
+    }
+
+export default function createAdminServer(props: {localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache}) {
     console.log('createAdminServer', )
     const deployHandler = createDeployHandler(props)
     const clearHandler = createClearHandler(props)
+    const setupHandler = createSetupHandler(props)
 
     const app = express()
     app.use(logCall)
@@ -57,9 +74,10 @@ export default function createAdminServer(props: {localFilePath: string, moduleC
         methods: ['POST'],
         preflightContinue: false
     }))
-    app.use(['/deploy',], express.json())
+    app.use(['/deploy','/setup'], express.json())
     app.post('/deploy', deployHandler)
-    clearHandler && app.post('/clearcache', clearHandler)
+    app.post('/clearcache', clearHandler)
+    app.post('/setup', setupHandler)
     app.use(errorHandler)
     return app
 }
