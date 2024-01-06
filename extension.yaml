@@ -2,7 +2,7 @@
 # https://firebase.google.com/docs/extensions/reference/extension-yaml
 
 name: elemento-app-server  # Identifier for your extension
-version: 0.1.1  # Follow semver versioning
+version: 0.1.2  # Follow semver versioning
 specVersion: v1beta  # Version of the Firebase Extensions specification
 
 # Friendly display name for your extension (~3-5 words)
@@ -29,6 +29,8 @@ author:
 apis:
   - apiName: storage.googleapis.com
     reason: The extension caches downloaded code modules in Cloud Storage
+  - apiName: firestore.googleapis.com
+    reason: The extension may store data in Firestore when running Server Apps
 
 # In a `roles` field, list any IAM access roles required for your extension to operate.
 # Learn more in the docs:
@@ -36,6 +38,8 @@ apis:
 roles:
   - role: storage.objectAdmin
     reason: The extension needs to create stored objects when it downloads new code modules
+  - role: datastore.user
+    reason: The extension needs to read and write data in Firestore when running Server Apps
 
 # In the `resources` field, list each of your extension's functions, including the trigger for each function.
 # Learn more in the docs:
