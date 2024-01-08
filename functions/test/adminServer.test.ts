@@ -90,7 +90,7 @@ test('admin Server', async (t) => {
             console.log('Settings updated')
 
             const tempFilePath = `${localFilePath}/temp1`
-            await settingsStore.downloadToFile(`settings.json`, tempFilePath)
+            await settingsStore.downloadToFile(`.settings.json`, tempFilePath)
             const retrievedSettings = await fs.promises.readFile(tempFilePath, 'utf8').then(JSON.parse)
             expect(retrievedSettings.previewPassword).toBe(previewPassword)
             await settingsStore.downloadToFile(`firebaseConfig.json`, tempFilePath)

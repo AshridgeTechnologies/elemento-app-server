@@ -84,3 +84,7 @@ export const checkData = (value: string | undefined, name: string, res: any) => 
         res.status(400).send(`${name} not supplied`)
     }
 }
+
+export function bufferFromJson(json: object) {
+    return Buffer.from(JSON.stringify(json, null, 2), 'utf8')
+}

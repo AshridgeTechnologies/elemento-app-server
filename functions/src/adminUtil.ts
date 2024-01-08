@@ -5,7 +5,7 @@ import {gzipSync} from 'fflate'
 
 import fs from 'fs'
 import crypto from 'crypto'
-import {fileExists, googleApiRequest, runtimeImportPath} from './util.js'
+import {bufferFromJson, fileExists, googleApiRequest, runtimeImportPath} from './util.js'
 import path from 'path'
 import {ModuleCache} from './CloudStorageCache.js'
 
@@ -146,10 +146,6 @@ async function getFirebaseConfig(firebaseProject: string, firebaseAccessToken: s
     return await firebaseRequest(`projects/${firebaseProject}/webApps/${app.appId}/config`, firebaseAccessToken)
 }
 
-function bufferFromJson(json: object) {
-    return Buffer.from(JSON.stringify(json, null, 2), 'utf8')
-}
-
 export async function setupProject({firebaseProject, firebaseAccessToken, settingsStore, settings}: {
     firebaseProject: string,
     firebaseAccessToken: string,
@@ -158,7 +154,7 @@ export async function setupProject({firebaseProject, firebaseAccessToken, settin
 }) {
     const config = await getFirebaseConfig(firebaseProject, firebaseAccessToken)
     await settingsStore.store('firebaseConfig.json', bufferFromJson(config))
-    await settingsStore.store('settings.json', bufferFromJson(settings))
+    await settingsStore.store('.settings.json', bufferFromJson(settings))
 }
 
 const usernameOf = (url: string) => new URL(url).pathname.substring(1).split('/')[0]

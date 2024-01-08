@@ -2,8 +2,8 @@ import {test} from 'node:test'
 import {expect} from 'expect'
 import {type Server} from 'http'
 import * as fs from 'fs'
-import {fileExists, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from '../src/util'
-import {newTestDir, serverAppCode} from './testUtil'
+import {bufferFromJson, fileExists, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from '../src/util'
+import {makeAdminServer, newTestDir, serverAppCode} from './testUtil'
 // @ts-ignore
 import admin from 'firebase-admin'
 import createPreviewServer from '../src/previewServer'
@@ -11,9 +11,9 @@ import {CloudStorageCache, ModuleCache} from '../src/CloudStorageCache'
 import * as dotenv from 'dotenv'
 import {getStorage} from 'firebase-admin/storage'
 
-async function makePreviewServer(localFilePath: string, moduleCache: ModuleCache) {
+async function makePreviewServer(localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache) {
     const serverPort = 7656
-    const theAppServer = await createPreviewServer({localFilePath, moduleCache})
+    const theAppServer = await createPreviewServer({localFilePath, moduleCache, settingsStore})
     const server = theAppServer.listen(serverPort)
     return {serverPort, server}
 }
@@ -23,7 +23,7 @@ const bucketName = `${firebaseProject}.appspot.com`
 const serviceAccountKeyPath = 'private/elemento-hosting-test-firebase-adminsdk-7en27-f3397ab7af.json'
 const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
 admin.initializeApp({credential: admin.credential.cert(serviceAccountKey), storageBucket: bucketName})
-const previewPassword = 'pass123'
+const previewPassword = 'pass' + Date.now()
 const validPreviewHeaders = {
     'Content-Type': 'text/plain',
     'x-preview-password': previewPassword,
@@ -33,20 +33,39 @@ test('preview Server', async (t) => {
 
     let localFilePath: string
     let moduleCache = new CloudStorageCache('previewCache')
+    let settingsStore = new CloudStorageCache('settings')
     let serviceAccountKey: string
 
     let server: Server | undefined, serverPort: number | undefined
     const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
 
+    t.before(async () => {
+        await settingsStore.store('.settings.json', bufferFromJson({previewPassword}))
+    })
+
     t.beforeEach(async () => {
-        dotenv.populate(process.env, {PREVIEW_PASSWORD: previewPassword})
         localFilePath = await newTestDir();
         serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
         await moduleCache.clear();
-        ({server, serverPort} = await makePreviewServer(localFilePath, moduleCache))
+        ({server, serverPort} = await makePreviewServer(localFilePath, moduleCache, settingsStore))
     })
 
     t.afterEach(stopServer)
+
+    await t.test('serves firebase config from settings', async () => {
+        const projectId = firebaseProject
+        await settingsStore.store('firebaseConfig.json', bufferFromJson({projectId}))
+        const getConfigUrl = `http://localhost:${serverPort}/preview/firebaseConfig.json`
+        const config = await fetch(getConfigUrl).then(resp => resp.json() )
+        expect(config).toStrictEqual({projectId})
+    })
+
+    await t.test('does not serves settings file from settings', async () => {
+        const projectId = firebaseProject
+        const getSettingsUrl = `http://localhost:${serverPort}/preview/.settings.json`
+        const resp = await fetch(getSettingsUrl)
+        expect(resp.status).toBe(404)
+    })
 
     await t.test('deploys server app preview and updates it and serves result', async () => {
         const putPreviewUrl = `http://localhost:${serverPort}/preview`

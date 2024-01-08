@@ -1,12 +1,13 @@
 import {AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
 import path from 'path'
-import {clearCache, elementoHost, getFromCache, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from './util.js'
+import {checkData, clearCache, elementoHost, getFromCache, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from './util.js'
 import {AppServerProperties} from './appServer.js'
 import fs from 'fs'
 import axios from 'axios'
 import express from 'express'
 import cors from 'cors'
 import {ModuleCache} from './CloudStorageCache.js'
+import {setupProject} from './adminUtil'
 
 const FILE_HEADER_PREFIX = '//// File: '
 const EOF_DELIMITER = '//// End of file'
@@ -151,12 +152,32 @@ const createClearHandler = ({localFilePath, moduleCache}: {localFilePath: string
         }
     }
 
-export default function createPreviewServer(props: {localFilePath: string, moduleCache: ModuleCache}) {
+const createGetHandler = ({localFilePath, settingsStore}: {localFilePath: string, settingsStore: ModuleCache }) =>
+    async (req: any, res: any, next: (err?: any) => void) => {
+        console.log('get handler', req.url)
+        const elementoFilesPath = path.join(localFilePath, 'clientFiles')
+        const fileName = path.basename(req.url)
+        if (fileName.startsWith('.')) {
+            res.sendStatus(404)
+            return
+        }
+        try {
+            const localDir = elementoFilesPath
+            const filePath = path.join(localDir, fileName)
+            await getFromCache(fileName, filePath, settingsStore)
+            const fileContents = await fs.promises.readFile(filePath, 'utf8')
+            res.send(fileContents)
+        } catch (err) {
+            next(err)
+        }
+    }
+
+export default function createPreviewServer(props: {localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache}) {
     console.log('createPreviewServer', )
     const appFactory = createPreviewAppFactory(props)
     const putHandler = createPutHandler(props)
+    const getHandler = createGetHandler(props)
     const clearHandler = createClearHandler(props)
-    // return expressPreviewApp(appFactory, putHandler, clearHandler)
 
     const app = express()
     app.use(logCall)
@@ -168,8 +189,10 @@ export default function createPreviewServer(props: {localFilePath: string, modul
     app.use(['/capi'], express.json())
     app.use('/preview', express.raw({type: '*/*'}))
     app.use(['/capi'], requestHandler(appFactory))
+
     app.post('/preview/clear', clearHandler)
     app.put('/preview', putHandler)
+    app.get('/preview/**', getHandler)
     app.use(errorHandler)
     return app
 }
