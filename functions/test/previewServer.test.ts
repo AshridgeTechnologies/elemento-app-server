@@ -60,7 +60,7 @@ test('preview Server', async (t) => {
         expect(config).toStrictEqual({projectId})
     })
 
-    await t.test('does not serves settings file from settings', async () => {
+    await t.test('does not serve .settings.json file ', async () => {
         const projectId = firebaseProject
         const getSettingsUrl = `http://localhost:${serverPort}/preview/.settings.json`
         const resp = await fetch(getSettingsUrl)
@@ -84,9 +84,10 @@ test('preview Server', async (t) => {
         }
 
         try {
-            await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
-
+            const resp = await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
+            expect(resp.status).toBe(200)
             console.log('Preview deployed')
+
             expect(await cachedFileContents(`preview/server/ServerApp1.mjs`)).toBe(serverAppWithTotalFunction)
             expect(await cachedFileContents(`preview/file2.txt`)).toBe('Some text')
             await expect(moduleCache.exists(`preview/server/serverRuntime.cjs`)).resolves.toBe(true)
@@ -102,8 +103,7 @@ test('preview Server', async (t) => {
             const serverAppWithDifference = serverAppCode.replace('//Differencecomment', '').replace( '// time', '// time ' + deployTime)
             const body2 = `//// File: ${serverAppPath}\n${serverAppWithDifference}\n//// End of file`
             await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body2})
-            const resp = await fetch(`${getPreviewUrl}/ServerApp1/Difference?x=20&y=30`)
-            const differenceResult = await resp.json()
+            const differenceResult = await fetch(`${getPreviewUrl}/ServerApp1/Difference?x=20&y=30`).then(resp => resp.json() )
             expect(differenceResult).toBe(-10)
         } finally {
             await stopServer()

@@ -46,6 +46,11 @@ export async function getFromCache(cachePath: string, localPath: string, cache: 
     }
 }
 
+export async function readFromCache(cachePath: string, localPath: string, cache: ModuleCache) {
+    await getFromCache(cachePath, localPath, cache)
+    return fs.promises.readFile(localPath, 'utf8')
+}
+
 export async function putIntoCacheAndFile(cachePath: string, localPath: string, cache: ModuleCache, contents: Buffer) {
     await Promise.all([
         mkdirWriteFile(localPath, contents),
@@ -56,7 +61,6 @@ export async function putIntoCacheAndFile(cachePath: string, localPath: string, 
 export function clearCache(localPath: string, cache: ModuleCache) {
     return cache.clear().then( ()=> rmdir(localPath))
 }
-
 
 export const isCacheObjectSourceModified = async (url: string, cachePath: string, cache: ModuleCache) => {
     const etag = await cache.etag(cachePath)

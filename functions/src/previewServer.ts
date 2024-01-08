@@ -1,13 +1,12 @@
 import {AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
 import path from 'path'
-import {checkData, clearCache, elementoHost, getFromCache, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from './util.js'
+import {clearCache, elementoHost, getFromCache, isCacheObjectSourceModified, putIntoCacheAndFile, readFromCache, runtimeImportPath} from './util.js'
 import {AppServerProperties} from './appServer.js'
 import fs from 'fs'
 import axios from 'axios'
 import express from 'express'
 import cors from 'cors'
 import {ModuleCache} from './CloudStorageCache.js'
-import {setupProject} from './adminUtil'
 
 const FILE_HEADER_PREFIX = '//// File: '
 const EOF_DELIMITER = '//// End of file'
@@ -87,10 +86,10 @@ function createPreviewAppFactory({localFilePath, moduleCache}: AppServerProperti
     }
 }
 
-const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
+const createPutHandler = ({localFilePath, moduleCache, settingsStore}: {localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache}) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('put handler', req.url)
-        if (!checkPreviewPassword(req, res)) {
+        if (!(await checkPreviewPassword(req, res, localFilePath, settingsStore))) {
             return
         }
         const elementoFilesPath = path.join(localFilePath, 'serverFiles')
@@ -121,13 +120,18 @@ const createPutHandler = ({localFilePath, moduleCache}: {localFilePath: string, 
         }
     }
 
-const checkPreviewPassword = (req: any, res: any): boolean => {
+const checkPreviewPassword = async (req: any, res: any, localFilePath: string, settingsStore: ModuleCache): Promise<boolean> => {
     const previewPassword: string = req.get('x-preview-password')
     if (!previewPassword) {
         res.status(401).send(`Preview password not supplied`)
         return false
     }
-    if (previewPassword !== process.env.PREVIEW_PASSWORD) {
+    const cachePath = '.settings.json'
+    const localPath = path.join(localFilePath, 'private', '.settings.json')
+    const settingsFileText = await readFromCache(cachePath, localPath, settingsStore)
+    const settingsJson = JSON.parse(settingsFileText)
+    const requiredPassword = settingsJson.previewPassword
+    if (previewPassword !== requiredPassword) {
         res.status(403).send(`Invalid password`)
         return false
     }
@@ -135,10 +139,10 @@ const checkPreviewPassword = (req: any, res: any): boolean => {
     return true
 }
 
-const createClearHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
+const createClearHandler = ({localFilePath, moduleCache, settingsStore}: {localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache}) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('clear handler', req.url)
-        if (!checkPreviewPassword(req, res)) {
+        if (!(await checkPreviewPassword(req, res, localFilePath, settingsStore))) {
             return
         }
 

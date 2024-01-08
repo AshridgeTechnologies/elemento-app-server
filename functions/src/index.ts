@@ -17,10 +17,14 @@ const settingsRoot = 'settings'
 const theAppServer = createAppServer({localFilePath, moduleCache: new CloudStorageCache(deployCacheRoot)})
 export const appServer = functions.https.onRequest(theAppServer)
 
-const theAdminServer = createAdminServer({localFilePath, moduleCache: new CloudStorageCache(deployCacheRoot), settingsStore: new CloudStorageCache(settingsRoot)})
+const theAdminServer = createAdminServer({localFilePath,
+    moduleCache: new CloudStorageCache(deployCacheRoot),
+    settingsStore: new CloudStorageCache(settingsRoot)})
 export const adminServer = functions.https.onRequest(theAdminServer)
 
-const thePreviewServer = createPreviewServer({localFilePath: previewLocalFilePath, moduleCache: new CloudStorageCache(previewCacheRoot)})
+const thePreviewServer = createPreviewServer({localFilePath: previewLocalFilePath,
+    moduleCache: new CloudStorageCache(previewCacheRoot),
+    settingsStore: new CloudStorageCache(settingsRoot)})
 export const previewServer = functions.https.onRequest(thePreviewServer)
     // properties controlled by extension.yaml
 
