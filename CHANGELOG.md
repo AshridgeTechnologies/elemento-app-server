@@ -1,3 +1,6 @@
+## Version 0.1.3
+- Add status check
+
 ## Version 0.1.2
 - Add Firestore access
 
