@@ -48,7 +48,7 @@ resources:
     properties:
       location: "europe-west2"
       httpsTrigger: {}
-      runtime: "nodejs18"
+      runtime: "nodejs20"
 
   - name: adminServer
     type: firebaseextensions.v1beta.function
@@ -57,7 +57,7 @@ resources:
     properties:
       location: "europe-west2"
       httpsTrigger: {}
-      runtime: "nodejs18"
+      runtime: "nodejs20"
       maxInstances: 1
 
   - name: previewServer
@@ -67,7 +67,7 @@ resources:
     properties:
       location: "europe-west2"
       httpsTrigger: {}
-      runtime: "nodejs18"
+      runtime: "nodejs20"
       maxInstances: 1
 
 # In the `params` field, set up your extension's user-configured parameters.
