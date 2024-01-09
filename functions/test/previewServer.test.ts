@@ -3,12 +3,11 @@ import {expect} from 'expect'
 import {type Server} from 'http'
 import * as fs from 'fs'
 import {bufferFromJson, fileExists, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from '../src/util'
-import {makeAdminServer, newTestDir, serverAppCode} from './testUtil'
+import {newTestDir, serverAppCode} from './testUtil'
 // @ts-ignore
 import admin from 'firebase-admin'
 import createPreviewServer from '../src/previewServer'
 import {CloudStorageCache, ModuleCache} from '../src/CloudStorageCache'
-import * as dotenv from 'dotenv'
 import {getStorage} from 'firebase-admin/storage'
 
 async function makePreviewServer(localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache) {
@@ -34,7 +33,6 @@ test('preview Server', async (t) => {
     let localFilePath: string
     let moduleCache = new CloudStorageCache('previewCache')
     let settingsStore = new CloudStorageCache('settings')
-    let serviceAccountKey: string
 
     let server: Server | undefined, serverPort: number | undefined
     const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
@@ -44,8 +42,7 @@ test('preview Server', async (t) => {
     })
 
     t.beforeEach(async () => {
-        localFilePath = await newTestDir();
-        serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
+        localFilePath = await newTestDir('previewServer');
         await moduleCache.clear();
         ({server, serverPort} = await makePreviewServer(localFilePath, moduleCache, settingsStore))
     })
@@ -61,7 +58,6 @@ test('preview Server', async (t) => {
     })
 
     await t.test('does not serve .settings.json file ', async () => {
-        const projectId = firebaseProject
         const getSettingsUrl = `http://localhost:${serverPort}/preview/.settings.json`
         const resp = await fetch(getSettingsUrl)
         expect(resp.status).toBe(404)

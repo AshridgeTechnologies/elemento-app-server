@@ -74,6 +74,7 @@ test('admin Server', async (t) => {
     await t.test('setup initialises firebase project', { skip: false }, async () => {
         await clearWebApps(firebaseAccessToken)
 
+        const statusUrl = `http://localhost:${serverPort}/status`
         const setupUrl = `http://localhost:${serverPort}/setup`
         const previewPassword = 'pass' + Date.now()
         const settings = {
@@ -85,9 +86,15 @@ test('admin Server', async (t) => {
         })
 
         try {
+            const statusResult = await fetch(statusUrl).then( resp => resp.json() )
+            expect(statusResult).toStrictEqual({status: 'Error', description: 'Extension not set up'})
+
             const setupResult = await fetch(setupUrl, {method: 'POST', headers, body: JSON.stringify(settings)})
             expect(setupResult.status).toBe(200)
             console.log('Settings updated')
+
+            const updatedStatusResult = await fetch(statusUrl).then( resp => resp.json() )
+            expect(updatedStatusResult).toStrictEqual({status: 'OK'})
 
             const tempFilePath = `${localFilePath}/temp1`
             await settingsStore.downloadToFile(`.settings.json`, tempFilePath)

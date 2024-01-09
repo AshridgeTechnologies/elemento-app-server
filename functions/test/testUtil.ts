@@ -90,8 +90,8 @@ return {
 export default ServerApp1`
 let dirSeq = 0
 
-export async function newTestDir() {
-    const localFilePath = `${os.tmpdir()}/adminServer.test.${++dirSeq}`
+export async function newTestDir(testName: string = `adminServer`) {
+    const localFilePath = `${os.tmpdir()}/${testName}.test.${++dirSeq}`
     await fs.promises.rm(localFilePath, {force: true, recursive: true}).then(() => fs.promises.mkdir(localFilePath, {recursive: true}))
     return localFilePath
 }

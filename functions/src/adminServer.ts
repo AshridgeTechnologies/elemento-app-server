@@ -61,11 +61,25 @@ const createSetupHandler = ({settingsStore}: { settingsStore: ModuleCache }) =>
         }
     }
 
+const createStatusHandler = ({localFilePath, settingsStore}: { localFilePath: string, settingsStore: ModuleCache }) =>
+    async (req: any, res: any, next: (err?: any) => void) => {
+        console.log('status handler', req.url)
+        try {
+            const downloadPath = path.join(localFilePath, 'firebaseConfig_forStatusCheck.json')
+            const firebaseConfigFound = await settingsStore.downloadToFile('firebaseConfig.json', downloadPath)
+            const statusResult = firebaseConfigFound ? {status: 'OK'} : {status: 'Error', description: 'Extension not set up'}
+            res.send(statusResult)
+        } catch (err) {
+            next(err)
+        }
+    }
+
 export default function createAdminServer(props: {localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache}) {
     console.log('createAdminServer', )
     const deployHandler = createDeployHandler(props)
     const clearHandler = createClearHandler(props)
     const setupHandler = createSetupHandler(props)
+    const statusHandler = createStatusHandler(props)
 
     const app = express()
     app.use(logCall)
@@ -78,6 +92,7 @@ export default function createAdminServer(props: {localFilePath: string, moduleC
     app.post('/deploy', deployHandler)
     app.post('/clearcache', clearHandler)
     app.post('/setup', setupHandler)
+    app.get('/status', statusHandler)
     app.use(errorHandler)
     return app
 }
