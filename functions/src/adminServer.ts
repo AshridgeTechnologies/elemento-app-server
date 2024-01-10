@@ -5,6 +5,7 @@ import {checkData, clearCache, elementoHost} from './util.js'
 import cors from 'cors'
 import {errorHandler, logCall} from './expressUtils.js'
 import {ModuleCache} from './CloudStorageCache.js'
+import fs from 'fs'
 
 const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
     async (req: Request, res: any, next: (err?: any) => void) => {
@@ -61,12 +62,11 @@ const createSetupHandler = ({settingsStore}: { settingsStore: ModuleCache }) =>
         }
     }
 
-const createStatusHandler = ({localFilePath, settingsStore}: { localFilePath: string, settingsStore: ModuleCache }) =>
+const createStatusHandler = ({settingsStore}: { settingsStore: ModuleCache }) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('status handler', req.url)
         try {
-            const downloadPath = path.join(localFilePath, 'firebaseConfig_forStatusCheck.json')
-            const firebaseConfigFound = await settingsStore.downloadToFile('firebaseConfig.json', downloadPath)
+            const firebaseConfigFound = await settingsStore.exists('firebaseConfig.json')
             const statusResult = firebaseConfigFound ? {status: 'OK'} : {status: 'Error', description: 'Extension not set up'}
             res.send(statusResult)
         } catch (err) {

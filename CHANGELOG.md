@@ -1,3 +1,6 @@
+## Version 0.1.4
+- Improved status check
+
 ## Version 0.1.3
 - Add status check
 

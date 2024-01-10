@@ -17,7 +17,10 @@ const createModuleCache = (): ModuleCache & {modules:any} => ({
         }
         return Promise.resolve(false)
     },
-    clear(accessToken: string) {
+    exists(cachePath: string): Promise<boolean> {
+        return Promise.resolve(!!this.modules[cachePath])
+    },
+    clear() {
         this.modules = {}
         return Promise.resolve()
     },

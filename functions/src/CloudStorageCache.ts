@@ -2,10 +2,10 @@ import {getStorage} from 'firebase-admin/storage'
 
 export interface ModuleCache {
     downloadToFile(path: string, localFilePath: string, logError?: boolean): Promise<boolean>
-
     clear(): Promise<void>
     etag(path: string): Promise<string | undefined>
     store(path: string, contents: Buffer, etag?: string): Promise<void>
+    exists(path: string): Promise<boolean>
 }
 
 export class CloudStorageCache implements ModuleCache {
