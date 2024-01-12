@@ -1,4 +1,4 @@
-import {type AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
+import {errorHandler, logCall, requestHandler, type AppFactory} from './expressUtils.js'
 import fs from 'fs'
 import path from 'path'
 import {getFromCache} from './util.js'

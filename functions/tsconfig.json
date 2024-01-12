@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "es2020",
+    "module": "es2022",
     "moduleResolution": "node",
     "noImplicitReturns": true,
     "outDir": "lib",

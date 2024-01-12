@@ -1,6 +1,44 @@
-import {NextFunction} from 'express'
+import express, {type NextFunction} from 'express'
 import {DecodedIdToken, getAuth} from 'firebase-admin/auth'
-import {parseParam} from './util.js'
+import {isObject, mapValues} from 'radash'
+import {parseISO} from 'date-fns'
+// import {parseParam} from '../util/helpers'
+export const isNumeric = (s: string) : boolean => s!== '' && s.match(/^\d*\.?\d*$/) !== null
+export const isBooleanString = (s: string) : boolean => s.match(/true|false/) !== null
+const parseParam = (param: string) => {
+    if (isNumeric(param)) {
+        return parseFloat(param)
+    }
+
+    if (isBooleanString(param)) {
+        return param === true.toString()
+    }
+
+    const date = parseISO(param)
+    if (!Number.isNaN(date.getTime())) {
+        return date
+    }
+
+    return param
+}
+
+/**
+ * NOTE: technical debt - this file is copied in the elemento-app-server project - changes must be synchronized
+ */
+
+const convertDataValues = (val: any): any => {
+    const date = parseISO(val)
+    if (!Number.isNaN(date.getTime())) {
+        console.log('Converting to date', val)
+        return date
+    }
+    if (isObject(val)) {
+        console.log('Converting as object', val)
+        return mapValues(val, convertDataValues)
+    }
+
+    return val
+}
 
 export type ServerAppHandler = {
     [key: string]: {func: (...args: Array<any>) => any, update: boolean, argNames: string[]}
@@ -8,16 +46,9 @@ export type ServerAppHandler = {
 export type AppFactory = (appName: string, user: DecodedIdToken | null, version: string) => Promise<ServerAppHandler>
 
 export function parseQueryParams(req: {query: { [key: string]: string; }}): object {
-    const result: {[key: string]: any} = {}
-    const {query} = req
-    for (const p in query) {
-        if (Object.prototype.hasOwnProperty.call(query, p)) {
-            result[p] = parseParam(query[p])
-        }
-    }
-    return result
+    return mapValues(req.query as any, parseParam) as object
 }
-export function errorHandler(err: any, req: any, res: any, _next: any) {
+export function errorHandler (err: any, req: any, res: any, _next: any) {
     const {status = 500, message} = err
     console.error(message)
     res?.status(status)
@@ -58,7 +89,7 @@ export const requestHandler = (appFactory: AppFactory) => async (req: any, res: 
             next(responseError(405, 'Method Not Allowed'))
             return
         }
-        const params = req.method === 'GET' ? parseQueryParams(req) : req.body
+        const params = req.method === 'GET' ? parseQueryParams(req) : convertDataValues(req.body)
         const argValues = argNames.map((n: string) => params[n])
         const result = await func(...argValues)
         res.json(result)
@@ -68,7 +99,15 @@ export const requestHandler = (appFactory: AppFactory) => async (req: any, res: 
 }
 
 export function logCall(req: any, res: any, next: NextFunction) {
-        console.log(req.method, req.url)
-        next()
+    console.log(req.method, req.url)
+    next()
 }
 
+export function expressApp(appFactory: AppFactory) {
+    const app = express()
+    app.use(express.json())
+    app.use('/capi', requestHandler(appFactory))
+    app.use(errorHandler)
+
+    return app
+}

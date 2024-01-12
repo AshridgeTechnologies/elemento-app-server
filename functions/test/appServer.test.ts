@@ -45,7 +45,7 @@ const fetchJson = (url: string) => fetch(url, {headers: { Accept: 'application/j
 
 async function makeAppServer(localFilePath: string, moduleCache: ModuleCache & { modules: any }) {
     const serverPort = 7655
-    const theAppServer = await createAppServer({localFilePath, moduleCache})
+    const theAppServer = createAppServer({localFilePath, moduleCache})
     const server = theAppServer.listen(serverPort)
     return {serverPort, server}
 }
