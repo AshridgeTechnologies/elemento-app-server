@@ -1,3 +1,6 @@
+## Version 0.1.6
+- Log full error in express app
+
 ## Version 0.1.5
 - Convert ISO date strings in parameters to JS Date
 

@@ -29,11 +29,9 @@ const parseParam = (param: string) => {
 const convertDataValues = (val: any): any => {
     const date = parseISO(val)
     if (!Number.isNaN(date.getTime())) {
-        console.log('Converting to date', val)
         return date
     }
     if (isObject(val)) {
-        console.log('Converting as object', val)
         return mapValues(val, convertDataValues)
     }
 
@@ -50,7 +48,7 @@ export function parseQueryParams(req: {query: { [key: string]: string; }}): obje
 }
 export function errorHandler (err: any, req: any, res: any, _next: any) {
     const {status = 500, message} = err
-    console.error(message)
+    console.error(err)
     res?.status(status)
     res?.send({error: {status, message}})
 }
