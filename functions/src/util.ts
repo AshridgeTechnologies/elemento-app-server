@@ -1,5 +1,4 @@
 import fs from 'fs'
-import {parseISO} from 'date-fns'
 import path from 'path'
 import axios, {HttpStatusCode, ResponseType} from 'axios'
 import {ModuleCache} from './CloudStorageCache.js'
@@ -14,25 +13,6 @@ const mkdirWriteFile = (localPath: string, contents: Buffer) =>
         .then( () => fs.promises.writeFile(localPath, contents) )
 
 const rmdir = (localPath: string) => fs.promises.rm(localPath, {recursive: true, force: true})
-const isNumeric = (s: string) : boolean => s!== '' && s.match(/^\d*\.?\d*$/) !== null
-const isBooleanString = (s: string) : boolean => s.match(/true|false/) !== null
-
-export const parseParam = (param: string) => {
-    if (isNumeric(param)) {
-        return parseFloat(param)
-    }
-
-    if (isBooleanString(param)) {
-        return param === true.toString()
-    }
-
-    const date = parseISO(param)
-    if (!Number.isNaN(date.getTime())) {
-        return date
-    }
-
-    return param
-}
 
 export async function getFromCache(cachePath: string, localPath: string, cache: ModuleCache) {
     const alreadyDownloaded = await fileExists(localPath)

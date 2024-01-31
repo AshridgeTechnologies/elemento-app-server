@@ -2,7 +2,7 @@ import {test} from 'node:test'
 import {expect} from 'expect'
 import {type Server} from 'http'
 import * as fs from 'fs'
-import {bufferFromJson, fileExists, isCacheObjectSourceModified, putIntoCacheAndFile, runtimeImportPath} from '../src/util'
+import {bufferFromJson, fileExists, putIntoCacheAndFile} from '../src/util'
 import {newTestDir, serverAppCode} from './testUtil'
 // @ts-ignore
 import admin from 'firebase-admin'
@@ -16,6 +16,14 @@ async function makePreviewServer(localFilePath: string, moduleCache: ModuleCache
     const server = theAppServer.listen(serverPort)
     return {serverPort, server}
 }
+
+let seq = 1
+async function cachedFileContents(path: string, localFilePath: string, moduleCache: ModuleCache) {
+    const tempFilePath = `${localFilePath}/temp${seq++}`
+    await moduleCache.downloadToFile(path, tempFilePath)
+    return await fs.promises.readFile(tempFilePath, 'utf8')
+}
+
 
 const firebaseProject = 'elemento-hosting-test'
 const bucketName = `${firebaseProject}.appspot.com`
@@ -72,26 +80,15 @@ test('preview Server', async (t) => {
         const body1 = `//// File: ${serverAppPath}\n${serverAppWithTotalFunction}\n//// End of file\n`
                         + `//// File: file2.txt\nSome text\n//// End of file\n`
 
-        let seq = 1
-        async function cachedFileContents(path: string) {
-            const tempFilePath = `${localFilePath}/temp${seq++}`
-            await moduleCache.downloadToFile(path, tempFilePath)
-            return await fs.promises.readFile(tempFilePath, 'utf8')
-        }
+        const cachedFile = (path: string) => cachedFileContents(path, localFilePath, moduleCache)
 
         try {
             const resp = await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
             expect(resp.status).toBe(200)
             console.log('Preview deployed')
 
-            expect(await cachedFileContents(`preview/server/ServerApp1.mjs`)).toBe(serverAppWithTotalFunction)
-            expect(await cachedFileContents(`preview/file2.txt`)).toBe('Some text')
-            await expect(moduleCache.exists(`preview/server/serverRuntime.cjs`)).resolves.toBe(true)
-            await expect(isCacheObjectSourceModified(`${runtimeImportPath}/serverRuntime.cjs`, 'preview/server/serverRuntime.cjs', moduleCache)).resolves.toBe(false)
-            // different source url, so expect modified
-            await expect(isCacheObjectSourceModified(`${runtimeImportPath}/runtime.js`, 'preview/server/serverRuntime.cjs', moduleCache)).resolves.toBe(true)
-            // file with no etag, so expect modified
-            await expect(isCacheObjectSourceModified(`${runtimeImportPath}/serverRuntime.cjs`, 'preview/server/ServerApp1.mjs', moduleCache)).resolves.toBe(true)
+            expect(await cachedFile(`preview/server/ServerApp1.mjs`)).toBe(serverAppWithTotalFunction)
+            expect(await cachedFile(`preview/file2.txt`)).toBe('Some text')
 
             const apiResult = await fetch(`${getPreviewUrl}/ServerApp1/Total?x=20&y=30&z=40`).then(resp => resp.json() )
             expect(apiResult).toBe(90)
@@ -101,33 +98,6 @@ test('preview Server', async (t) => {
             await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body2})
             const differenceResult = await fetch(`${getPreviewUrl}/ServerApp1/Difference?x=20&y=30`).then(resp => resp.json() )
             expect(differenceResult).toBe(-10)
-        } finally {
-            await stopServer()
-        }
-    })
-
-    await t.test('downloads runtime again after two clear and upload cycles in succession', async () => {
-        const putPreviewUrl = `http://localhost:${serverPort}/preview`
-        const clearPreviewUrl = `http://localhost:${serverPort}/preview/clear`
-        const serverAppPath = 'server/ServerApp1.mjs'
-        const body1 = `//// File: ${serverAppPath}\n${serverAppCode}\n//// End of file\n`
-
-        let seq = 1
-        async function cachedFileContents(path: string) {
-            const tempFilePath = `${localFilePath}/temp${seq++}`
-            await moduleCache.downloadToFile(path, tempFilePath)
-            return await fs.promises.readFile(tempFilePath, 'utf8')
-        }
-
-        try {
-            await fetch(clearPreviewUrl, {method: 'POST', headers: validPreviewHeaders})
-            await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
-            await fetch(clearPreviewUrl, {method: 'POST', headers: validPreviewHeaders})
-            await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
-
-            console.log('Preview deployed')
-            expect(await cachedFileContents(`preview/server/ServerApp1.mjs`)).toBe(serverAppCode)
-            await expect(moduleCache.exists(`preview/server/serverRuntime.cjs`)).resolves.toBe(true)
         } finally {
             await stopServer()
         }

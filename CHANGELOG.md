@@ -1,3 +1,6 @@
+## Version 0.1.7
+- Fix server runtime cache download problem
+
 ## Version 0.1.6
 - Log full error in express app
 

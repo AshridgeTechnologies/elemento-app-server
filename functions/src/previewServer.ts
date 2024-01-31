@@ -1,6 +1,6 @@
 import {AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
 import path from 'path'
-import {clearCache, elementoHost, getFromCache, isCacheObjectSourceModified, putIntoCacheAndFile, readFromCache, runtimeImportPath} from './util.js'
+import {clearCache, elementoHost, fileExists, getFromCache, putIntoCacheAndFile, readFromCache, runtimeImportPath} from './util.js'
 import {AppServerProperties} from './appServer.js'
 import fs from 'fs'
 import axios from 'axios'
@@ -12,14 +12,19 @@ const FILE_HEADER_PREFIX = '//// File: '
 const EOF_DELIMITER = '//// End of file'
 const appModuleCache: {[appName: string]: Function | null} = {}
 
-async function downloadToCacheAndFileWithEtag(url: string, localPath: string, cachePath: string, moduleCache: ModuleCache) {
+async function downloadToFile(url: string, localPath: string) {
+    console.log('downloadToFile', url)
     const response = await axios.get(url, {responseType: 'arraybuffer'})
-    const etag = response.headers['etag']
     const fileBuffer: Buffer = await response.data
     await Promise.all([
-        moduleCache.store(cachePath, fileBuffer, etag),
         fs.promises.mkdir(path.dirname(localPath), {recursive: true}).then( ()=> fs.promises.writeFile(localPath, fileBuffer) )
     ])
+}
+
+async function downloadToFileIfNotExists(url: string, localPath: string) {
+    if (!await fileExists(localPath)) {
+        await downloadToFile(url, localPath)
+    }
 }
 
 type FileItems = {[name: string]: string}
@@ -35,15 +40,11 @@ function extractFileItems(combinedFiles: string): FileItems {
     }))
 }
 
-let lastModifiedCheckTime = 0
-const updateServerRuntime = async (serverRuntimeUrl: string, cachePath: string, localPath: string, cache: ModuleCache) => {
-    if (Date.now() - lastModifiedCheckTime > 60000) {
-        const modified = await isCacheObjectSourceModified(serverRuntimeUrl, cachePath, cache)
-        lastModifiedCheckTime = Date.now()
-        if (modified) {
-            await downloadToCacheAndFileWithEtag(serverRuntimeUrl, localPath, cachePath, cache)
-        }
-    }
+function ensureServerRuntimeDownloaded(elementoFilesPath: string) {
+    const serverRuntimeUrl = `${runtimeImportPath}/serverRuntime.cjs`
+    const serverRuntimePath = 'preview/server/serverRuntime.cjs'
+    const serverRuntimeLocalPath = path.join(elementoFilesPath, serverRuntimePath)
+    return downloadToFileIfNotExists(serverRuntimeUrl, serverRuntimeLocalPath)
 }
 
 function createPreviewAppFactory({localFilePath, moduleCache}: AppServerProperties): AppFactory {
@@ -67,7 +68,7 @@ function createPreviewAppFactory({localFilePath, moduleCache}: AppServerProperti
             const appModuleDir = path.join(elementoFilesPath, version, 'server')
             const appModulePath = path.join(appModuleDir, appFileName)
             const runtimePath = path.join(appModuleDir, runtimeName)
-            const runtimeDownload = getFromCache(`${version}/server/${runtimeName}`, runtimePath, moduleCache)
+            const runtimeDownload = ensureServerRuntimeDownloaded(elementoFilesPath)
             const moduleDownload = getFromCache(`${version}/server/${appFileName}`, appModulePath, moduleCache)
 
             await Promise.all([runtimeDownload, moduleDownload])
@@ -86,7 +87,11 @@ function createPreviewAppFactory({localFilePath, moduleCache}: AppServerProperti
     }
 }
 
-const createPutHandler = ({localFilePath, moduleCache, settingsStore}: {localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache}) =>
+const createPutHandler = ({localFilePath, moduleCache, settingsStore}: {
+    localFilePath: string,
+    moduleCache: ModuleCache,
+    settingsStore: ModuleCache
+}) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('put handler', req.url)
         if (!(await checkPreviewPassword(req, res, localFilePath, settingsStore))) {
@@ -110,10 +115,10 @@ const createPutHandler = ({localFilePath, moduleCache, settingsStore}: {localFil
             const filePromises = Object.entries(fileItems).map(([filePath, fileText]) => storeFile(`preview/${filePath}`, fileText))
             await Promise.all(filePromises)
 
-            const serverRuntimeUrl = `${runtimeImportPath}/serverRuntime.cjs`
-            const serverRuntimePath = 'preview/server/serverRuntime.cjs'
-            const serverRuntimeLocalPath = path.join(elementoFilesPath, serverRuntimePath)
-            await updateServerRuntime(serverRuntimeUrl, serverRuntimePath, serverRuntimeLocalPath, moduleCache)
+            // const serverRuntimeUrl = `${runtimeImportPath}/serverRuntime.cjs`
+            // const serverRuntimePath = 'preview/server/serverRuntime.cjs'
+            // const serverRuntimeLocalPath = path.join(elementoFilesPath, serverRuntimePath)
+            // await updateServerRuntime(serverRuntimeUrl, serverRuntimePath, serverRuntimeLocalPath, moduleCache)
             res.end()
         } catch (err) {
             next(err)
@@ -139,7 +144,11 @@ const checkPreviewPassword = async (req: any, res: any, localFilePath: string, s
     return true
 }
 
-const createClearHandler = ({localFilePath, moduleCache, settingsStore}: {localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache}) =>
+const createClearHandler = ({localFilePath, moduleCache, settingsStore}: {
+    localFilePath: string,
+    moduleCache: ModuleCache,
+    settingsStore: ModuleCache
+}) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('clear handler', req.url)
         if (!(await checkPreviewPassword(req, res, localFilePath, settingsStore))) {
@@ -149,7 +158,6 @@ const createClearHandler = ({localFilePath, moduleCache, settingsStore}: {localF
         const elementoFilesPath = path.join(localFilePath, 'serverFiles')
         try {
             await clearCache(elementoFilesPath, moduleCache)
-            lastModifiedCheckTime = 0
             res.end()
         } catch (err) {
             next(err)
