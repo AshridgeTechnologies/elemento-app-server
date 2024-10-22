@@ -40,6 +40,8 @@ roles:
     reason: The extension needs to create stored objects when it downloads new code modules
   - role: datastore.user
     reason: The extension needs to read and write data in Firestore when running Server Apps
+  - role: firebaseauth.admin
+    reason: The extension may create and update Firebase users
 
 # In the `resources` field, list each of your extension's functions, including the trigger for each function.
 # Learn more in the docs:
