@@ -3,7 +3,7 @@ import {getStorage} from 'firebase-admin/storage'
 export interface ModuleCache {
     downloadToFile(path: string, localFilePath: string, logError?: boolean): Promise<boolean>
     clear(): Promise<void>
-    etag(path: string): Promise<string | undefined>
+    etag(path: string): Promise<string | number | boolean | null | undefined>
     store(path: string, contents: Buffer, etag?: string): Promise<void>
     exists(path: string): Promise<boolean>
 }
@@ -24,7 +24,7 @@ export class CloudStorageCache implements ModuleCache {
         return this.file(path).exists().then(([result]) => result)
     }
 
-    async etag(path: string): Promise<string | undefined> {
+    async etag(path: string): Promise<string | number | boolean | null | undefined> {
         const exists = await this.exists(path)
         if (!exists) return undefined
         const [response] = await this.file(path).getMetadata()

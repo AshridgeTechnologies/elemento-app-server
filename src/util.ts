@@ -6,6 +6,21 @@ import {ModuleCache} from './CloudStorageCache.js'
 export const elementoHost = 'https://elemento.online'
 export const runtimeImportPath = elementoHost + '/lib'
 
+export type AppServerProperties = {
+    localFilePath: string,
+    moduleCache: ModuleCache,
+}
+
+export type AdminServerProperties = AppServerProperties & {settingsStore: ModuleCache, defaultFirebaseProject: string}
+export type InstallServerProperties = {}
+export type PreviewServerProperties = AppServerProperties & {settingsStore: ModuleCache}
+export type AllServerProperties = {
+    app?: AppServerProperties,
+    admin?: AdminServerProperties,
+    preview?: PreviewServerProperties,
+    install?: InstallServerProperties
+}
+
 export const fileExists = (filePath: string): Promise<boolean> => fs.promises.access(filePath).then(() => true, () => false)
 
 const mkdirWriteFile = (localPath: string, contents: Buffer) =>
@@ -42,14 +57,6 @@ export function clearCache(localPath: string, cache: ModuleCache) {
     return cache.clear().then( ()=> rmdir(localPath))
 }
 
-export const isCacheObjectSourceModified = async (url: string, cachePath: string, cache: ModuleCache) => {
-    const etag = await cache.etag(cachePath)
-    return axios.head(url, {
-        headers: {'If-None-Match': etag},
-        validateStatus: status => status <= 304
-    }).then( resp => resp.status !== HttpStatusCode.NotModified)
-}
-
 export async function googleApiRequest(host: string, path: string, accessToken: string, method?: string, data?: object) {
     const url = `${host}/${path}`
     const responseType = 'json' as ResponseType
@@ -66,7 +73,9 @@ export async function googleApiRequest(host: string, path: string, accessToken: 
 export const checkData = (value: string | undefined, name: string, res: any) => {
     if (!value) {
         res.status(400).send(`${name} not supplied`)
+        return false
     }
+    return true
 }
 
 export function bufferFromJson(json: object) {

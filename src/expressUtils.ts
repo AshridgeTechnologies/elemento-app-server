@@ -1,8 +1,8 @@
-import express, {type NextFunction} from 'express'
+import {type NextFunction} from 'express'
 import {DecodedIdToken, getAuth} from 'firebase-admin/auth'
 import {isObject, mapValues} from 'radash'
 import {parseISO} from 'date-fns'
-// import {parseParam} from '../util/helpers'
+
 export const isNumeric = (s: string) : boolean => s!== '' && s.match(/^\d*\.?\d*$/) !== null
 export const isBooleanString = (s: string) : boolean => s.match(/true|false/) !== null
 const parseParam = (param: string) => {
@@ -99,13 +99,4 @@ export const requestHandler = (appFactory: AppFactory) => async (req: any, res: 
 export function logCall(req: any, res: any, next: NextFunction) {
     console.log(req.method, req.url)
     next()
-}
-
-export function expressApp(appFactory: AppFactory) {
-    const app = express()
-    app.use(express.json())
-    app.use('/capi', requestHandler(appFactory))
-    app.use(errorHandler)
-
-    return app
 }

@@ -1,14 +1,11 @@
 import {test} from 'node:test'
 import {expect} from 'expect'
 import {type Server} from 'http'
-import * as fs from 'fs'
 import {googleApiRequest} from '../src/util'
-import {getAccessToken, makeAdminServer, newTestDir, wait} from './testUtil'
+import {createModuleCache, getAccessToken, initializeApp, makeServer, newTestDir, wait} from './testUtil'
 import git from 'isomorphic-git'
-// @ts-ignore
-import admin from 'firebase-admin'
-import * as dotenv from 'dotenv'
-import {CloudStorageCache} from '../src/CloudStorageCache'
+import * as fs from 'fs'
+import {ModuleCache} from '../src/CloudStorageCache'
 
 const getLatestCommitId = async (dir: string) => {
     const commits = await git.log({
@@ -19,11 +16,7 @@ const getLatestCommitId = async (dir: string) => {
     return commits[0].oid.substring(0, 12)
 }
 
-const firebaseProject = 'elemento-hosting-test'
-const bucketName = `${firebaseProject}.appspot.com`
-const serviceAccountKeyPath = 'private/elemento-hosting-test-firebase-adminsdk-7en27-f3397ab7af.json'
-const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
-admin.initializeApp({credential: admin.credential.cert(serviceAccountKey), storageBucket: bucketName})
+const {firebaseProject, serviceAccountKeyPath} = initializeApp()
 
 async function clearWebApps(firebaseAccessToken: string) {
     const getApps = async () => {
@@ -41,11 +34,16 @@ async function clearWebApps(firebaseAccessToken: string) {
 test('admin Server', async (t) => {
 
     let localFilePath: string
-    let moduleCache = new CloudStorageCache('deployCache')
-    let settingsStore = new CloudStorageCache('settings')
+    let adminModuleCache: ModuleCache & { modules: any }
+    let settingsStore: ModuleCache & { modules: any }
     let gitHubAccessToken: string, serviceAccountKey: string, firebaseAccessToken: string, headers: HeadersInit
 
     let server: Server | undefined, serverPort: number | undefined
+    const startServer = async (defaultFirebaseProject = firebaseProject) => {
+        ({server, serverPort} = await makeServer({
+            admin: {localFilePath, moduleCache: adminModuleCache, settingsStore, defaultFirebaseProject},
+        }))
+    }
     const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
 
     const requestData = {
@@ -53,11 +51,6 @@ test('admin Server', async (t) => {
     }
 
     t.beforeEach(async () => {
-        dotenv.populate(process.env, {PROJECT_ID: firebaseProject})
-        expect(process.env.PROJECT_ID).toBe(firebaseProject)
-        localFilePath = await newTestDir();
-        await moduleCache.clear()
-        await settingsStore.clear()
         gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1-2RepoToken_finegrained.txt', 'utf8')
         serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
         firebaseAccessToken = await getAccessToken(serviceAccountKey);
@@ -66,16 +59,21 @@ test('admin Server', async (t) => {
             'x-firebase-access-token': firebaseAccessToken,
             'X-GitHub-Access-Token': gitHubAccessToken,
         });
-        ({server, serverPort} = await makeAdminServer(localFilePath, moduleCache, settingsStore))
+
+        localFilePath = await newTestDir('adminServer')
+        adminModuleCache = createModuleCache()
+        settingsStore = createModuleCache();
     })
 
     t.afterEach(stopServer)
 
     await t.test('setup initialises firebase project', { skip: false }, async () => {
+        await startServer()
         await clearWebApps(firebaseAccessToken)
 
-        const statusUrl = `http://localhost:${serverPort}/status`
-        const setupUrl = `http://localhost:${serverPort}/setup`
+        const overviewUrl = `http://localhost:${serverPort}/admin/`
+        const statusUrl = `http://localhost:${serverPort}/admin/status`
+        const setupUrl = `http://localhost:${serverPort}/admin/setup`
         const previewPassword = 'pass' + Date.now()
         const settings = {
             previewPassword
@@ -86,10 +84,16 @@ test('admin Server', async (t) => {
         })
 
         try {
-            const statusResult = await fetch(statusUrl).then( resp => resp.json() )
-            expect(statusResult).toStrictEqual({status: 'Error', description: 'Extension not set up'})
+            const overviewResult = await fetch(overviewUrl).then( resp => resp.text() )
+            expect(overviewResult).toStrictEqual(`<h1>Elemento App Server</h1>
+<div>Firebase config not found</div>
+<div>Services available: app, admin, preview, install</div>
+`)
 
-            const setupResult = await fetch(setupUrl, {method: 'POST', headers, body: JSON.stringify(settings)})
+            const statusResult = await fetch(statusUrl).then( resp => resp.json() )
+            expect(statusResult).toStrictEqual({status: 'Error', description: 'Firebase config not set up'})
+
+            const setupResult = await fetch(setupUrl, {method: 'POST', headers, body: JSON.stringify({settings})})
             expect(setupResult.status).toBe(200)
             console.log('Settings updated')
 
@@ -111,9 +115,10 @@ test('admin Server', async (t) => {
 
     await t.test('deploys client-only project from GitHub', { skip: false }, async () => {
 
+        await startServer()
         await clearWebApps(firebaseAccessToken)
 
-        const deployUrl = `http://localhost:${serverPort}/deploy`
+        const deployUrl = `http://localhost:${serverPort}/admin/deploy`
         try {
             const deployResult = await fetch(deployUrl, {method: 'POST', headers, body: JSON.stringify(requestData)}).then( resp => resp.json() )
             console.log('Deployed')
@@ -145,11 +150,13 @@ test('admin Server', async (t) => {
         }
     })
 
-    await t.test('deploys project with server app from GitHub', { skip: false }, async () => {
+    await t.test('deploys project with server app from GitHub using specified firebase project', { skip: false }, async () => {
 
-        const deployUrl = `http://localhost:${serverPort}/deploy`
+        await startServer('other-firebase-project')
+        const deployUrl = `http://localhost:${serverPort}/admin/deploy`
         try {
-            const deployResult = await fetch(deployUrl, {method: 'POST', headers, body: JSON.stringify(requestData)}).then( resp => resp.json() )
+            const requestWithFirebaseProject = {...requestData, firebaseProject: firebaseProject}
+            const deployResult = await fetch(deployUrl, {method: 'POST', headers, body: JSON.stringify(requestWithFirebaseProject)}).then( resp => resp.json() )
             console.log('Deployed')
             const {releaseTime} = deployResult
             const releaseTimeMillis = new Date(releaseTime).getTime()
@@ -167,10 +174,10 @@ test('admin Server', async (t) => {
             expect(versionInfo.commitId).toBe(commitId)
 
             const tempFilePath = `${localFilePath}/temp1`
-            await moduleCache.downloadToFile(`${commitId}/server/ServerApp1.mjs`, tempFilePath)
+            await adminModuleCache.downloadToFile(`${commitId}/server/ServerApp1.mjs`, tempFilePath)
             const fileContents = await fs.promises.readFile(tempFilePath, 'utf8')
             expect(fileContents).toContain('AddTen')
-            await expect(moduleCache.exists(`${commitId}/server/serverRuntime.cjs`)).resolves.toBe(true)
+            await expect(adminModuleCache.exists(`${commitId}/server/serverRuntime.cjs`)).resolves.toBe(true)
 
             const apiResult = await fetch(`https://${firebaseProject}.web.app/capi/${commitId}/ServerApp1/AddTen?a=20`).then(resp => resp.json() )
             expect(apiResult).toBe(30)
@@ -178,7 +185,4 @@ test('admin Server', async (t) => {
             await stopServer()
         }
     })
-
-
-
 })

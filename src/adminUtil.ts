@@ -8,10 +8,13 @@ import crypto from 'crypto'
 import {bufferFromJson, fileExists, googleApiRequest, runtimeImportPath} from './util.js'
 import path from 'path'
 import {ModuleCache} from './CloudStorageCache.js'
+import {env} from 'process'
 
 const ASSET_DIR = 'files'
 const firebaseRootUrl = `https://firebase.googleapis.com/v1beta1`
 const hostingRootUrl = `https://firebasehosting.googleapis.com/v1beta1`
+
+export const defaultRegion = 'europe-west2'
 
 export type ProjectSettings = {
     previewPassword: string
@@ -146,6 +149,16 @@ async function getFirebaseConfig(firebaseProject: string, firebaseAccessToken: s
     return await firebaseRequest(`projects/${firebaseProject}/webApps/${app.appId}/config`, firebaseAccessToken)
 }
 
+export async function getOverview({settingsStore}: {settingsStore: ModuleCache}) {
+    const firebaseConfigFound = await settingsStore.exists('firebaseConfig.json')
+    const statusResult = `Firebase config ${firebaseConfigFound ? 'OK' : 'not found'}`
+    const services = `Services available: ${servicesAvailable}`
+    return `<h1>Elemento App Server</h1>
+<div>${statusResult}</div>
+<div>${services}</div>
+`
+}
+
 export async function setupProject({firebaseProject, firebaseAccessToken, settingsStore, settings}: {
     firebaseProject: string,
     firebaseAccessToken: string,
@@ -157,7 +170,17 @@ export async function setupProject({firebaseProject, firebaseAccessToken, settin
     await settingsStore.store('.settings.json', bufferFromJson(settings))
 }
 
+const serverAppRewrites = (region: string) => ([
+    {
+        glob: '/@(capi|admin|preview|install)/**',
+        run: {
+            serviceId: 'elemento-app-server',
+            region
+        }
+    }
+] as any[])
 const usernameOf = (url: string) => new URL(url).pathname.substring(1).split('/')[0]
+
 export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepoUrl), firebaseProject, checkoutPath, firebaseAccessToken, gitHubAccessToken, moduleCache}:
                                           {gitRepoUrl: string, firebaseProject: string, checkoutPath: string,
                                               firebaseAccessToken: string, username?: string, gitHubAccessToken: string, moduleCache: ModuleCache}) {
@@ -213,13 +236,7 @@ export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepo
 
     await deployServerFiles({gitRepoUrl, checkoutPath, commitId, deployTime, moduleCache, firebaseAccessToken})
 
-    const serverAppRewrites = [
-        {
-            functionRegion: 'europe-west2',
-            glob: '/capi/**',
-            function: 'ext-elemento-app-server-appServer'
-        }
-    ] as any[]
+    const serverRewrites = serverAppRewrites(defaultRegion)
     const appDirs = await fs.promises.readdir(clientDirPath, {withFileTypes: true})
         .then( files => files.filter( f => f.isDirectory() && f.name !== ASSET_DIR).map( f => f.name ) )
     const spaRewrites = appDirs.map( dir =>  ({glob: `/${dir}/**`, path: `/${dir}/index.html`}))
@@ -236,7 +253,7 @@ export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepo
         return []
     }
     const defaultAppRedirects = await getDefaultAppRedirects()
-    const rewrites = [...serverAppRewrites, ...spaRewrites]
+    const rewrites = [...serverRewrites, ...spaRewrites]
     const redirects = [...defaultAppRedirects]
     const headers = [
             {
@@ -270,3 +287,51 @@ export async function deployToHosting({gitRepoUrl, username = usernameOf(gitRepo
     console.log('release', releaseResult)
     return releaseResult
 }
+
+async function getExistingAppRewrites(siteName: string, firebaseAccessToken: string): Promise<any[]> {
+    console.log('Getting current hosting config')
+    const {releases} = await hostingRequest(`sites/${siteName}/channels/live/releases?pageSize=1`, firebaseAccessToken)
+    console.log('releases', releases)
+    const latestRelease = releases[0]
+    const existingRewrites = latestRelease?.version?.config?.rewrites
+    if (!existingRewrites) return []
+
+    return existingRewrites.filter( (rewrite: any) => rewrite.path )
+}
+
+export async function deployRewritesOnlyToHosting({firebaseProject, region, firebaseAccessToken}: {firebaseProject: string, region: string, firebaseAccessToken: string}) {
+
+    console.log('Starting deploy rewrites to hosting')
+    const {sites} = await hostingRequest(`projects/${firebaseProject}/sites`, firebaseAccessToken)
+    console.log('sites', sites)
+
+    const site = sites.find((s: any) => s.type === 'DEFAULT_SITE')
+    const siteName = site.name.match(/[^/]+$/)[0]
+
+    const appRewrites = await getExistingAppRewrites(siteName, firebaseAccessToken)
+    const version = await hostingRequest(`sites/${siteName}/versions`, firebaseAccessToken, 'POST')
+    console.log('version', version)
+
+    const hostingConfig = {
+        rewrites: [...serverAppRewrites(region), ...appRewrites]
+    }
+
+    console.log('hostingConfig for rewrites only', JSON.stringify(hostingConfig))
+
+    //TODO - possible race condition here - following call fails intermittently with 404, although should exist when previous call returns
+    // Could just wait, or get the version until can find it, or retry the request after 5s if it fails
+    const patchResult = await hostingRequest(`${version.name}?update_mask=status,config`, firebaseAccessToken, 'PATCH',
+        {
+            status: 'FINALIZED',
+            config: hostingConfig
+        })
+
+    console.log('patch', patchResult)
+
+    const releaseResult = await hostingRequest(`sites/${siteName}/releases?versionName=${version.name}`, firebaseAccessToken, 'POST')
+    console.log('release', releaseResult)
+    return releaseResult
+}
+
+export const defaultServices = 'app, admin, preview, install'
+export const servicesAvailable = (env.SERVICES_AVAILABLE ?? defaultServices).toLowerCase()

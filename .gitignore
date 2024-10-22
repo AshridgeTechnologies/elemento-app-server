@@ -1,5 +1,9 @@
-# Node.js dependency directory
+## Compiled JavaScript files
+**/*.js
+**/*.js.map
+
+# Typescript v1 declaration files
+typings/
+
 node_modules/
-/functions/integration-tests/extensions/appServer.env
 /private
-**/private

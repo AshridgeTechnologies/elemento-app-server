@@ -3,19 +3,9 @@ import {expect} from 'expect'
 import {type Server} from 'http'
 import * as fs from 'fs'
 import {bufferFromJson, fileExists, putIntoCacheAndFile} from '../src/util'
-import {newTestDir, serverAppCode} from './testUtil'
-// @ts-ignore
-import admin from 'firebase-admin'
-import createPreviewServer from '../src/previewServer'
-import {CloudStorageCache, ModuleCache} from '../src/CloudStorageCache'
+import {createModuleCache, initializeApp, makeServer, newTestDir, serverAppCode} from './testUtil'
+import {ModuleCache} from '../src/CloudStorageCache'
 import {getStorage} from 'firebase-admin/storage'
-
-async function makePreviewServer(localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache) {
-    const serverPort = 7656
-    const theAppServer = await createPreviewServer({localFilePath, moduleCache, settingsStore})
-    const server = theAppServer.listen(serverPort)
-    return {serverPort, server}
-}
 
 let seq = 1
 async function cachedFileContents(path: string, localFilePath: string, moduleCache: ModuleCache) {
@@ -24,12 +14,7 @@ async function cachedFileContents(path: string, localFilePath: string, moduleCac
     return await fs.promises.readFile(tempFilePath, 'utf8')
 }
 
-
-const firebaseProject = 'elemento-hosting-test'
-const bucketName = `${firebaseProject}.appspot.com`
-const serviceAccountKeyPath = 'private/elemento-hosting-test-firebase-adminsdk-7en27-f3397ab7af.json'
-const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
-admin.initializeApp({credential: admin.credential.cert(serviceAccountKey), storageBucket: bucketName})
+const {firebaseProject, serviceAccountKeyPath} = initializeApp()
 const previewPassword = 'pass' + Date.now()
 const validPreviewHeaders = {
     'Content-Type': 'text/plain',
@@ -37,22 +22,20 @@ const validPreviewHeaders = {
 }
 
 test('preview Server', async (t) => {
-
     let localFilePath: string
-    let moduleCache = new CloudStorageCache('previewCache')
-    let settingsStore = new CloudStorageCache('settings')
-
+    let previewModuleCache: ModuleCache & { modules: any }
+    let settingsStore: ModuleCache & { modules: any }
     let server: Server | undefined, serverPort: number | undefined
     const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
 
-    t.before(async () => {
-        await settingsStore.store('.settings.json', bufferFromJson({previewPassword}))
-    })
-
     t.beforeEach(async () => {
         localFilePath = await newTestDir('previewServer');
-        await moduleCache.clear();
-        ({server, serverPort} = await makePreviewServer(localFilePath, moduleCache, settingsStore))
+        previewModuleCache = createModuleCache()
+        settingsStore = createModuleCache();
+        await settingsStore.store('.settings.json', bufferFromJson({previewPassword}));
+        ({server, serverPort} = await makeServer({
+            preview: {localFilePath, moduleCache: previewModuleCache, settingsStore }
+        }))
     })
 
     t.afterEach(stopServer)
@@ -73,14 +56,14 @@ test('preview Server', async (t) => {
 
     await t.test('deploys server app preview and updates it and serves result', async () => {
         const putPreviewUrl = `http://localhost:${serverPort}/preview`
-        const getPreviewUrl = `http://localhost:${serverPort}/capi/preview`
+        const getPreviewUrl = `http://localhost:${serverPort}/preview/capi/preview`
         const deployTime = Date.now()
         const serverAppWithTotalFunction = serverAppCode.replace('//Totalcomment', '').replace( '// time', '// time ' + deployTime)
         const serverAppPath = 'server/ServerApp1.mjs'
         const body1 = `//// File: ${serverAppPath}\n${serverAppWithTotalFunction}\n//// End of file\n`
-                        + `//// File: file2.txt\nSome text\n//// End of file\n`
+            + `//// File: file2.txt\nSome text\n//// End of file\n`
 
-        const cachedFile = (path: string) => cachedFileContents(path, localFilePath, moduleCache)
+        const cachedFile = (path: string) => cachedFileContents(path, localFilePath, previewModuleCache)
 
         try {
             const resp = await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
@@ -122,15 +105,15 @@ test('preview Server', async (t) => {
     await t.test('clears all of preview cache', async () => {
         const clearPreviewUrl = `http://localhost:${serverPort}/preview/clear`
 
-        await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', moduleCache, Buffer.from('file 1 contents'))
-        await putIntoCacheAndFile('deploy1/file2.txt', localFilePath + '/serverFiles/deploy1/file2.txt', moduleCache, Buffer.from('file 2 contents'))
+        await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', previewModuleCache, Buffer.from('file 1 contents'))
+        await putIntoCacheAndFile('deploy1/file2.txt', localFilePath + '/serverFiles/deploy1/file2.txt', previewModuleCache, Buffer.from('file 2 contents'))
         const otherFile = getStorage().bucket().file('previewCache' + '_not' + '/'+ 'otherFile.txt')
         await otherFile.save('other file')
         try {
             const response = await fetch(clearPreviewUrl, {method: 'POST', headers: validPreviewHeaders})
             expect(response.ok).toBe(true)
-            await expect(moduleCache.exists(`deploy1/file2.txt`)).resolves.toBe(false)
-            await expect(moduleCache.exists(`preview/file1.txt`)).resolves.toBe(false)
+            await expect(previewModuleCache.exists(`deploy1/file2.txt`)).resolves.toBe(false)
+            await expect(previewModuleCache.exists(`preview/file1.txt`)).resolves.toBe(false)
             await expect(fileExists(localFilePath + '/' + 'serverFiles/deploy1/file2.txt')).resolves.toBe(false)
             await expect(fileExists(localFilePath + '/' + 'serverFiles/preview/file1.txt')).resolves.toBe(false)
             await expect(otherFile.exists()).resolves.toStrictEqual([true])
@@ -145,11 +128,11 @@ test('preview Server', async (t) => {
         }
         const clearPreviewUrl = `http://localhost:${serverPort}/preview/clear`
 
-        await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', moduleCache, Buffer.from('file 1 contents'))
+        await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', previewModuleCache, Buffer.from('file 1 contents'))
         try {
             const response = await fetch(clearPreviewUrl, {method: 'POST', headers: previewHeaders})
             expect(response.ok).toBe(false)
-            await expect(moduleCache.exists(`preview/file1.txt`)).resolves.toBe(true)
+            await expect(previewModuleCache.exists(`preview/file1.txt`)).resolves.toBe(true)
             await expect(fileExists(localFilePath + '/' + 'serverFiles/preview/file1.txt')).resolves.toBe(true)
         }  finally {
             await stopServer()
@@ -163,16 +146,39 @@ test('preview Server', async (t) => {
         }
         const clearPreviewUrl = `http://localhost:${serverPort}/preview/clear`
 
-        await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', moduleCache, Buffer.from('file 1 contents'))
+        await putIntoCacheAndFile('preview/file1.txt', localFilePath + '/serverFiles/preview/file1.txt', previewModuleCache, Buffer.from('file 1 contents'))
         try {
             const response = await fetch(clearPreviewUrl, {method: 'POST', headers: previewHeaders})
             expect(response.ok).toBe(false)
-            await expect(moduleCache.exists(`preview/file1.txt`)).resolves.toBe(true)
+            await expect(previewModuleCache.exists(`preview/file1.txt`)).resolves.toBe(true)
             await expect(fileExists(localFilePath + '/' + 'serverFiles/preview/file1.txt')).resolves.toBe(true)
         }  finally {
             await stopServer()
         }
     })
 
+    // test for bug introduced by node 20.11 with Cloud Storage download of large files
+    await t.test('runs server app preview when serverRuntime is already in cache but not in local file', async () => {
+        await previewModuleCache.clear();
+        const putPreviewUrl = `http://localhost:${serverPort}/preview`
+        const getPreviewUrl = `http://localhost:${serverPort}/preview/capi/preview`
+        const deployTime = Date.now()
+        const serverAppWithTotalFunction = serverAppCode.replace('//Totalcomment', '').replace( '// time', '// time ' + deployTime)
+        const serverAppPath = 'server/ServerApp1.mjs'
+        const body1 = `//// File: ${serverAppPath}\n${serverAppWithTotalFunction}\n//// End of file\n`
+            + `//// File: file2.txt\nSome text\n//// End of file\n`
 
+        try {
+            const resp = await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
+            expect(resp.status).toBe(200)
+            console.log('Preview deployed')
+
+            // await fs.promises.unlink(`${localFilePath}/serverFiles/preview/server/serverRuntime.cjs`)
+
+            const apiResult = await fetch(`${getPreviewUrl}/ServerApp1/Total?x=20&y=30&z=40`).then(resp => resp.json() )
+            expect(apiResult).toBe(90)
+        } finally {
+            await stopServer()
+        }
+    })
 })

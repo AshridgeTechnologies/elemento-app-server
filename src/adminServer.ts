@@ -1,31 +1,38 @@
 import express, {Request} from 'express'
 import path from 'path'
-import {deployToHosting, setupProject} from './adminUtil.js'
-import {checkData, clearCache, elementoHost} from './util.js'
+import {deployToHosting, getOverview, setupProject} from './adminUtil.js'
+import {AdminServerProperties, checkData, clearCache, elementoHost} from './util.js'
 import cors from 'cors'
 import {errorHandler, logCall} from './expressUtils.js'
 import {ModuleCache} from './CloudStorageCache.js'
-import fs from 'fs'
 
-const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
+const createOverviewHandler = ({settingsStore, defaultFirebaseProject}: {settingsStore: ModuleCache, defaultFirebaseProject: string}) =>
+    async (req: any, res: any, next: (err?: any) => void) => {
+        console.log('overview handler', req.url)
+        try {
+            const html = await getOverview({settingsStore})
+            res.send(html)
+        } catch (err) {
+            next(err)
+        }
+    }
+
+const createDeployHandler = ({localFilePath, moduleCache, defaultFirebaseProject}: AdminServerProperties) =>
     async (req: Request, res: any, next: (err?: any) => void) => {
         console.log('deploy handler', req.url)
-        console.log(process.env)
         try {
-            const {gitRepoUrl} = req.body
+            const {gitRepoUrl, firebaseProject = defaultFirebaseProject} = req.body
             const firebaseAccessToken = req.get('x-firebase-access-token')
             const gitHubAccessToken = req.get('x-github-access-token')
 
             checkData(gitRepoUrl, 'Git URL', res)
             checkData(gitHubAccessToken, 'GitHub access token', res)
             checkData(firebaseAccessToken, 'Google access token', res)
-
-            const firebaseProject: string | undefined = process.env.PROJECT_ID
-            checkData(firebaseProject, 'Firebase Project in PROJECT_ID env variable', res)
+            checkData(firebaseProject, 'Firebase Project', res)
 
             const deployTag = new Date().toISOString().substring(0, 19)
             const checkoutPath = path.join(localFilePath, 'deploy', deployTag)
-            const releaseResult = await deployToHosting({gitRepoUrl, firebaseProject: firebaseProject!, checkoutPath,
+            const releaseResult = await deployToHosting({gitRepoUrl, firebaseProject, checkoutPath,
                 firebaseAccessToken: firebaseAccessToken!, gitHubAccessToken: gitHubAccessToken!, moduleCache})
             res.send(releaseResult)
         } catch (err) {
@@ -46,16 +53,15 @@ const createClearHandler = ({localFilePath, moduleCache}: { localFilePath: strin
         }
     }
 
-const createSetupHandler = ({settingsStore}: { settingsStore: ModuleCache }) =>
+const createSetupHandler = ({settingsStore, defaultFirebaseProject}: AdminServerProperties) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('setup handler', req.url)
         try {
-            const settings = req.body
+            const {settings, firebaseProject = defaultFirebaseProject} = req.body
             const firebaseAccessToken: string = req.get('x-firebase-access-token')
             checkData(firebaseAccessToken, 'Google access token', res)
-            const firebaseProject: string | undefined = process.env.PROJECT_ID
-            checkData(firebaseProject, 'Firebase Project in PROJECT_ID env variable', res)
-            await setupProject({firebaseAccessToken, firebaseProject: firebaseProject!, settingsStore, settings})
+            checkData(firebaseProject, 'Firebase Project', res)
+            await setupProject({firebaseAccessToken, firebaseProject, settingsStore, settings})
             res.end()
         } catch (err) {
             next(err)
@@ -67,19 +73,20 @@ const createStatusHandler = ({settingsStore}: { settingsStore: ModuleCache }) =>
         console.log('status handler', req.url)
         try {
             const firebaseConfigFound = await settingsStore.exists('firebaseConfig.json')
-            const statusResult = firebaseConfigFound ? {status: 'OK'} : {status: 'Error', description: 'Extension not set up'}
+            const statusResult = firebaseConfigFound ? {status: 'OK'} : {status: 'Error', description: 'Firebase config not set up'}
             res.send(statusResult)
         } catch (err) {
             next(err)
         }
     }
 
-export default function createAdminServer(props: {localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache}) {
+export default function createAdminServer(props: AdminServerProperties) {
     console.log('createAdminServer', )
     const deployHandler = createDeployHandler(props)
     const clearHandler = createClearHandler(props)
     const setupHandler = createSetupHandler(props)
     const statusHandler = createStatusHandler(props)
+    const overviewHandler = createOverviewHandler(props)
 
     const app = express()
     app.use(logCall)
@@ -93,6 +100,7 @@ export default function createAdminServer(props: {localFilePath: string, moduleC
     app.post('/clearcache', clearHandler)
     app.post('/setup', setupHandler)
     app.get('/status', statusHandler)
+    app.get('/', overviewHandler)
     app.use(errorHandler)
     return app
 }
