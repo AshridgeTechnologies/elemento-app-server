@@ -1,14 +1,8 @@
-import {errorHandler, logCall, requestHandler, type AppFactory} from './expressUtils.js'
+import {type AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
 import fs from 'fs'
 import path from 'path'
-import {getFromCache} from './util.js'
+import {AppServerProperties, getFromCache} from './util.js'
 import express from 'express'
-import {ModuleCache} from './CloudStorageCache.js'
-
-export type AppServerProperties = {
-    localFilePath: string,
-    moduleCache: ModuleCache,
-}
 
 function createAppFactory({localFilePath, moduleCache}: AppServerProperties): AppFactory {
     const elementoFilesPath = path.join(localFilePath, 'serverFiles')

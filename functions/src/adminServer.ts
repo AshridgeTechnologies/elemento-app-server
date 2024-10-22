@@ -1,13 +1,12 @@
 import express, {Request} from 'express'
 import path from 'path'
 import {deployToHosting, setupProject} from './adminUtil.js'
-import {checkData, clearCache, elementoHost} from './util.js'
+import {AppServerProperties, checkData, clearCache, elementoHost} from './util.js'
 import cors from 'cors'
 import {errorHandler, logCall} from './expressUtils.js'
 import {ModuleCache} from './CloudStorageCache.js'
-import fs from 'fs'
 
-const createDeployHandler = ({localFilePath, moduleCache}: {localFilePath: string, moduleCache: ModuleCache}) =>
+const createDeployHandler = ({localFilePath, moduleCache}: AppServerProperties) =>
     async (req: Request, res: any, next: (err?: any) => void) => {
         console.log('deploy handler', req.url)
         console.log(process.env)

@@ -6,6 +6,19 @@ import {ModuleCache} from './CloudStorageCache.js'
 export const elementoHost = 'https://elemento.online'
 export const runtimeImportPath = elementoHost + '/lib'
 
+export type AppServerProperties = {
+    localFilePath: string,
+    moduleCache: ModuleCache,
+}
+
+export type AdminServerProperties = AppServerProperties & {settingsStore: ModuleCache}
+export type PreviewServerProperties = AppServerProperties & {settingsStore: ModuleCache}
+export type AllServerProperties = {
+    app: AppServerProperties,
+    admin: AdminServerProperties,
+    preview: PreviewServerProperties
+}
+
 export const fileExists = (filePath: string): Promise<boolean> => fs.promises.access(filePath).then(() => true, () => false)
 
 const mkdirWriteFile = (localPath: string, contents: Buffer) =>

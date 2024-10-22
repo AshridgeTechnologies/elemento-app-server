@@ -1,7 +1,15 @@
 import {AppFactory, errorHandler, logCall, requestHandler} from './expressUtils.js'
 import path from 'path'
-import {clearCache, elementoHost, fileExists, getFromCache, putIntoCacheAndFile, readFromCache, runtimeImportPath} from './util.js'
-import {AppServerProperties} from './appServer.js'
+import {
+    AppServerProperties,
+    clearCache,
+    elementoHost,
+    fileExists,
+    getFromCache, AllServerProperties,
+    putIntoCacheAndFile,
+    readFromCache,
+    runtimeImportPath, PreviewServerProperties
+} from './util.js'
 import fs from 'fs'
 import axios from 'axios'
 import express from 'express'
@@ -184,7 +192,7 @@ const createGetHandler = ({localFilePath, settingsStore}: {localFilePath: string
         }
     }
 
-export default function createPreviewServer(props: {localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache}) {
+export default function createPreviewServer(props: PreviewServerProperties) {
     console.log('createPreviewServer', )
     const appFactory = createPreviewAppFactory(props)
     const putHandler = createPutHandler(props)
@@ -199,12 +207,12 @@ export default function createPreviewServer(props: {localFilePath: string, modul
         preflightContinue: false
     }))
     app.use(['/capi'], express.json())
-    app.use('/preview', express.raw({type: '*/*'}))
+    app.use('/', express.raw({type: '*/*'}))
     app.use(['/capi'], requestHandler(appFactory))
 
-    app.post('/preview/clear', clearHandler)
-    app.put('/preview', putHandler)
-    app.get('/preview/**', getHandler)
+    app.post('/clear', clearHandler)
+    app.put('/', putHandler)
+    app.get('/**', getHandler)
     app.use(errorHandler)
     return app
 }

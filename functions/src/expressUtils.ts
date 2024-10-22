@@ -100,12 +100,3 @@ export function logCall(req: any, res: any, next: NextFunction) {
     console.log(req.method, req.url)
     next()
 }
-
-export function expressApp(appFactory: AppFactory) {
-    const app = express()
-    app.use(express.json())
-    app.use('/capi', requestHandler(appFactory))
-    app.use(errorHandler)
-
-    return app
-}
