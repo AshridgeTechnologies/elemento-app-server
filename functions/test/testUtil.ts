@@ -1,9 +1,12 @@
 import {google} from 'googleapis'
 import {Credentials} from 'google-auth-library'
 import * as os from 'os'
-import * as fs from 'fs'
-import createAdminServer from '../src/adminServer'
 import {ModuleCache} from '../src/CloudStorageCache'
+import {AllServerProperties} from '../src/util'
+import {createServer} from '../src/server'
+import * as fs from 'fs'
+// @ts-ignore
+import admin from 'firebase-admin'
 
 export function getAccessToken(serviceAccountKey: any): Promise<string> {
     const SCOPES = [
@@ -88,17 +91,49 @@ return {
 }
 
 export default ServerApp1`
+
 let dirSeq = 0
 
-export async function newTestDir(testName: string = `adminServer`) {
+export async function newTestDir(testName: string) {
     const localFilePath = `${os.tmpdir()}/${testName}.test.${++dirSeq}`
     await fs.promises.rm(localFilePath, {force: true, recursive: true}).then(() => fs.promises.mkdir(localFilePath, {recursive: true}))
     return localFilePath
 }
 
-export async function makeAdminServer(localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache) {
+export const createModuleCache = (): ModuleCache & {modules:any} => ({
+    modules: {},
+    downloadToFile(cachePath: string, localPath: string, _ = false): Promise<boolean> {
+        if (this.modules[cachePath]) {
+            return fs.promises.writeFile(localPath, this.modules[cachePath]).then( () => true )
+        }
+        return Promise.resolve(false)
+    },
+    exists(cachePath: string): Promise<boolean> {
+        return Promise.resolve(!!this.modules[cachePath])
+    },
+    clear() {
+        this.modules = {}
+        return Promise.resolve()
+    },
+    etag(_: string) { return undefined },
+    store(path: string, contents: Buffer, _?: string) {
+        this.modules[path] = contents
+        return Promise.resolve()
+    }
+})
+
+export async function makeServer(props: AllServerProperties) {
     const serverPort = 7655
-    const theAppServer = await createAdminServer({localFilePath, moduleCache, settingsStore})
-    const server = theAppServer.listen(7655)
+    const theAppServer = createServer(props)
+    const server = theAppServer.listen(serverPort)
     return {serverPort, server}
+}
+
+export function initializeApp() {
+    const firebaseProject = 'elemento-hosting-test'
+    const bucketName = `${firebaseProject}.appspot.com`
+    const serviceAccountKeyPath = 'private/elemento-hosting-test-firebase-adminsdk-7en27-f3397ab7af.json'
+    const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
+    admin.initializeApp({credential: admin.credential.cert(serviceAccountKey), storageBucket: bucketName})
+    return {firebaseProject, serviceAccountKeyPath}
 }

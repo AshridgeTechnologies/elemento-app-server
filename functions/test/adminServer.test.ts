@@ -1,14 +1,12 @@
 import {test} from 'node:test'
 import {expect} from 'expect'
 import {type Server} from 'http'
-import * as fs from 'fs'
 import {googleApiRequest} from '../src/util'
-import {getAccessToken, makeAdminServer, newTestDir, wait} from './testUtil'
+import {createModuleCache, getAccessToken, initializeApp, makeServer, newTestDir, wait} from './testUtil'
 import git from 'isomorphic-git'
-// @ts-ignore
-import admin from 'firebase-admin'
+import * as fs from 'fs'
 import * as dotenv from 'dotenv'
-import {CloudStorageCache} from '../src/CloudStorageCache'
+import {ModuleCache} from '../src/CloudStorageCache'
 
 const getLatestCommitId = async (dir: string) => {
     const commits = await git.log({
@@ -19,11 +17,7 @@ const getLatestCommitId = async (dir: string) => {
     return commits[0].oid.substring(0, 12)
 }
 
-const firebaseProject = 'elemento-hosting-test'
-const bucketName = `${firebaseProject}.appspot.com`
-const serviceAccountKeyPath = 'private/elemento-hosting-test-firebase-adminsdk-7en27-f3397ab7af.json'
-const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
-admin.initializeApp({credential: admin.credential.cert(serviceAccountKey), storageBucket: bucketName})
+const {firebaseProject, serviceAccountKeyPath} = initializeApp()
 
 async function clearWebApps(firebaseAccessToken: string) {
     const getApps = async () => {
@@ -40,9 +34,11 @@ async function clearWebApps(firebaseAccessToken: string) {
 
 test('admin Server', async (t) => {
 
-    let localFilePath: string
-    let moduleCache = new CloudStorageCache('deployCache')
-    let settingsStore = new CloudStorageCache('settings')
+    let localFilePath: string, previewLocalFilePath: string
+    let appModuleCache: ModuleCache & {modules: any}
+    let adminModuleCache: ModuleCache & {modules: any}
+    let previewModuleCache: ModuleCache & {modules: any}
+    let settingsStore: ModuleCache & {modules: any}
     let gitHubAccessToken: string, serviceAccountKey: string, firebaseAccessToken: string, headers: HeadersInit
 
     let server: Server | undefined, serverPort: number | undefined
@@ -55,9 +51,6 @@ test('admin Server', async (t) => {
     t.beforeEach(async () => {
         dotenv.populate(process.env, {PROJECT_ID: firebaseProject})
         expect(process.env.PROJECT_ID).toBe(firebaseProject)
-        localFilePath = await newTestDir();
-        await moduleCache.clear()
-        await settingsStore.clear()
         gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1-2RepoToken_finegrained.txt', 'utf8')
         serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
         firebaseAccessToken = await getAccessToken(serviceAccountKey);
@@ -66,7 +59,19 @@ test('admin Server', async (t) => {
             'x-firebase-access-token': firebaseAccessToken,
             'X-GitHub-Access-Token': gitHubAccessToken,
         });
-        ({server, serverPort} = await makeAdminServer(localFilePath, moduleCache, settingsStore))
+
+        localFilePath = await newTestDir('adminServer')
+        previewLocalFilePath = await newTestDir('previewServer')
+        appModuleCache = createModuleCache()
+        adminModuleCache = createModuleCache()
+        previewModuleCache = createModuleCache()
+        settingsStore = createModuleCache();
+
+        ({server, serverPort} = await makeServer({
+            app: {localFilePath, moduleCache: appModuleCache},
+            admin: {localFilePath, moduleCache: adminModuleCache, settingsStore },
+            preview: {localFilePath: previewLocalFilePath, moduleCache: previewModuleCache, settingsStore }
+        }))
     })
 
     t.afterEach(stopServer)
@@ -74,8 +79,8 @@ test('admin Server', async (t) => {
     await t.test('setup initialises firebase project', { skip: false }, async () => {
         await clearWebApps(firebaseAccessToken)
 
-        const statusUrl = `http://localhost:${serverPort}/status`
-        const setupUrl = `http://localhost:${serverPort}/setup`
+        const statusUrl = `http://localhost:${serverPort}/admin/status`
+        const setupUrl = `http://localhost:${serverPort}/admin/setup`
         const previewPassword = 'pass' + Date.now()
         const settings = {
             previewPassword
@@ -113,7 +118,7 @@ test('admin Server', async (t) => {
 
         await clearWebApps(firebaseAccessToken)
 
-        const deployUrl = `http://localhost:${serverPort}/deploy`
+        const deployUrl = `http://localhost:${serverPort}/admin/deploy`
         try {
             const deployResult = await fetch(deployUrl, {method: 'POST', headers, body: JSON.stringify(requestData)}).then( resp => resp.json() )
             console.log('Deployed')
@@ -147,7 +152,7 @@ test('admin Server', async (t) => {
 
     await t.test('deploys project with server app from GitHub', { skip: false }, async () => {
 
-        const deployUrl = `http://localhost:${serverPort}/deploy`
+        const deployUrl = `http://localhost:${serverPort}/admin/deploy`
         try {
             const deployResult = await fetch(deployUrl, {method: 'POST', headers, body: JSON.stringify(requestData)}).then( resp => resp.json() )
             console.log('Deployed')
@@ -167,10 +172,10 @@ test('admin Server', async (t) => {
             expect(versionInfo.commitId).toBe(commitId)
 
             const tempFilePath = `${localFilePath}/temp1`
-            await moduleCache.downloadToFile(`${commitId}/server/ServerApp1.mjs`, tempFilePath)
+            await adminModuleCache.downloadToFile(`${commitId}/server/ServerApp1.mjs`, tempFilePath)
             const fileContents = await fs.promises.readFile(tempFilePath, 'utf8')
             expect(fileContents).toContain('AddTen')
-            await expect(moduleCache.exists(`${commitId}/server/serverRuntime.cjs`)).resolves.toBe(true)
+            await expect(adminModuleCache.exists(`${commitId}/server/serverRuntime.cjs`)).resolves.toBe(true)
 
             const apiResult = await fetch(`https://${firebaseProject}.web.app/capi/${commitId}/ServerApp1/AddTen?a=20`).then(resp => resp.json() )
             expect(apiResult).toBe(30)
@@ -178,7 +183,4 @@ test('admin Server', async (t) => {
             await stopServer()
         }
     })
-
-
-
 })
