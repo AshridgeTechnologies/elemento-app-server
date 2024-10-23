@@ -163,4 +163,29 @@ test('preview Server', async (t) => {
             await stopServer()
         }
     })
+
+    // test for bug introduced by node 20.11 with Cloud Storage download of large files
+    await t.test('runs server app preview when serverRuntime is already in cache but not in local file', async () => {
+        await previewModuleCache.clear();
+        const putPreviewUrl = `http://localhost:${serverPort}/preview`
+        const getPreviewUrl = `http://localhost:${serverPort}/preview/capi/preview`
+        const deployTime = Date.now()
+        const serverAppWithTotalFunction = serverAppCode.replace('//Totalcomment', '').replace( '// time', '// time ' + deployTime)
+        const serverAppPath = 'server/ServerApp1.mjs'
+        const body1 = `//// File: ${serverAppPath}\n${serverAppWithTotalFunction}\n//// End of file\n`
+            + `//// File: file2.txt\nSome text\n//// End of file\n`
+
+        try {
+            const resp = await fetch(putPreviewUrl, {method: 'PUT', headers: validPreviewHeaders, body: body1})
+            expect(resp.status).toBe(200)
+            console.log('Preview deployed')
+
+            // await fs.promises.unlink(`${localFilePath}/serverFiles/preview/server/serverRuntime.cjs`)
+
+            const apiResult = await fetch(`${getPreviewUrl}/ServerApp1/Total?x=20&y=30&z=40`).then(resp => resp.json() )
+            expect(apiResult).toBe(90)
+        } finally {
+            await stopServer()
+        }
+    })
 })
