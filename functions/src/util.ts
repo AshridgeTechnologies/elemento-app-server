@@ -55,14 +55,6 @@ export function clearCache(localPath: string, cache: ModuleCache) {
     return cache.clear().then( ()=> rmdir(localPath))
 }
 
-export const isCacheObjectSourceModified = async (url: string, cachePath: string, cache: ModuleCache) => {
-    const etag = await cache.etag(cachePath)
-    return axios.head(url, {
-        headers: {'If-None-Match': etag},
-        validateStatus: status => status <= 304
-    }).then( resp => resp.status !== HttpStatusCode.NotModified)
-}
-
 export async function googleApiRequest(host: string, path: string, accessToken: string, method?: string, data?: object) {
     const url = `${host}/${path}`
     const responseType = 'json' as ResponseType

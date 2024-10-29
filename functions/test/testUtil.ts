@@ -3,7 +3,7 @@ import {Credentials} from 'google-auth-library'
 import * as os from 'os'
 import {ModuleCache} from '../src/CloudStorageCache'
 import {AllServerProperties} from '../src/util'
-import {createServer} from '../src/server'
+import {createServer, runServer} from '../src/server'
 import * as fs from 'fs'
 // @ts-ignore
 import admin from 'firebase-admin'
@@ -11,7 +11,8 @@ import admin from 'firebase-admin'
 export function getAccessToken(serviceAccountKey: any): Promise<string> {
     const SCOPES = [
         'https://www.googleapis.com/auth/firebase',
-        'https://www.googleapis.com/auth/devstorage.full_control'
+        'https://www.googleapis.com/auth/devstorage.full_control',
+        'https://www.googleapis.com/auth/cloud-platform'
     ]
 
     return new Promise(function (resolve, reject) {
@@ -124,16 +125,16 @@ export const createModuleCache = (): ModuleCache & {modules:any} => ({
 
 export async function makeServer(props: AllServerProperties) {
     const serverPort = 7655
-    const theAppServer = createServer(props)
-    const server = theAppServer.listen(serverPort)
+    const server = runServer(serverPort, props)
     return {serverPort, server}
 }
 
 export function initializeApp() {
     const firebaseProject = 'elemento-hosting-test'
+    const projectNumber = '1090024681079'
     const bucketName = `${firebaseProject}.appspot.com`
-    const serviceAccountKeyPath = 'private/elemento-hosting-test-firebase-adminsdk-7en27-f3397ab7af.json'
+    const serviceAccountKeyPath = 'private/elemento-hosting-test-firebase-adminsdk-7en27-db761c9579.json'
     const serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
     admin.initializeApp({credential: admin.credential.cert(serviceAccountKey), storageBucket: bucketName})
-    return {firebaseProject, serviceAccountKeyPath}
+    return {firebaseProject, projectNumber, serviceAccountKeyPath}
 }

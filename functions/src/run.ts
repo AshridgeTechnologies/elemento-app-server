@@ -1,9 +1,14 @@
-import {runServer} from './server'
-import {initializeApp} from 'firebase-admin/lib/app'
+import {runServer} from './server.js'
+import {initializeApp} from 'firebase-admin/app'
 import os from 'os'
-import {CloudStorageCache} from './CloudStorageCache'
+import {CloudStorageCache} from './CloudStorageCache.js'
+import {env} from 'process'
 
-initializeApp()
+const portEnv = env.PORT ?? '8080'
+const port = Number(portEnv)
+const projectId = env.GOOGLE_CLOUD_PROJECT ?? 'NO_PROJECT_ID'
+
+initializeApp({storageBucket: `${projectId}.appspot.com`})
 
 const localFilePath = os.tmpdir() + '/' + 'appServer'
 const previewLocalFilePath = os.tmpdir() + '/' + 'previewServer'
@@ -19,4 +24,5 @@ const previewServerProps = {localFilePath: previewLocalFilePath,
     moduleCache: new CloudStorageCache(previewCacheRoot),
     settingsStore: new CloudStorageCache(settingsRoot)}
 
-runServer(8080, {app: appServerProps, admin: adminServerProps, preview: previewServerProps})
+runServer(port, {app: appServerProps, admin: adminServerProps, preview: previewServerProps})
+console.log('Started server on port', port)

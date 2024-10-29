@@ -49,8 +49,8 @@ test('admin Server', async (t) => {
     }
 
     t.beforeEach(async () => {
-        dotenv.populate(process.env, {PROJECT_ID: firebaseProject})
-        expect(process.env.PROJECT_ID).toBe(firebaseProject)
+        dotenv.populate(process.env, {GOOGLE_CLOUD_PROJECT: firebaseProject})
+        expect(process.env.GOOGLE_CLOUD_PROJECT).toBe(firebaseProject)
         gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1-2RepoToken_finegrained.txt', 'utf8')
         serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
         firebaseAccessToken = await getAccessToken(serviceAccountKey);
@@ -92,7 +92,7 @@ test('admin Server', async (t) => {
 
         try {
             const statusResult = await fetch(statusUrl).then( resp => resp.json() )
-            expect(statusResult).toStrictEqual({status: 'Error', description: 'Extension not set up'})
+            expect(statusResult).toStrictEqual({status: 'Error', description: 'Firebase config not set up'})
 
             const setupResult = await fetch(setupUrl, {method: 'POST', headers, body: JSON.stringify(settings)})
             expect(setupResult.status).toBe(200)

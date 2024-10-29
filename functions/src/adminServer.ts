@@ -19,8 +19,8 @@ const createDeployHandler = ({localFilePath, moduleCache}: AppServerProperties) 
             checkData(gitHubAccessToken, 'GitHub access token', res)
             checkData(firebaseAccessToken, 'Google access token', res)
 
-            const firebaseProject: string | undefined = process.env.PROJECT_ID
-            checkData(firebaseProject, 'Firebase Project in PROJECT_ID env variable', res)
+            const firebaseProject: string | undefined = process.env.GOOGLE_CLOUD_PROJECT
+            checkData(firebaseProject, 'Firebase Project in GOOGLE_CLOUD_PROJECT env variable', res)
 
             const deployTag = new Date().toISOString().substring(0, 19)
             const checkoutPath = path.join(localFilePath, 'deploy', deployTag)
@@ -52,8 +52,8 @@ const createSetupHandler = ({settingsStore}: { settingsStore: ModuleCache }) =>
             const settings = req.body
             const firebaseAccessToken: string = req.get('x-firebase-access-token')
             checkData(firebaseAccessToken, 'Google access token', res)
-            const firebaseProject: string | undefined = process.env.PROJECT_ID
-            checkData(firebaseProject, 'Firebase Project in PROJECT_ID env variable', res)
+            const firebaseProject: string | undefined = process.env.GOOGLE_CLOUD_PROJECT
+            checkData(firebaseProject, 'Firebase Project in GOOGLE_CLOUD_PROJECT env variable', res)
             await setupProject({firebaseAccessToken, firebaseProject: firebaseProject!, settingsStore, settings})
             res.end()
         } catch (err) {
@@ -66,7 +66,7 @@ const createStatusHandler = ({settingsStore}: { settingsStore: ModuleCache }) =>
         console.log('status handler', req.url)
         try {
             const firebaseConfigFound = await settingsStore.exists('firebaseConfig.json')
-            const statusResult = firebaseConfigFound ? {status: 'OK'} : {status: 'Error', description: 'Extension not set up'}
+            const statusResult = firebaseConfigFound ? {status: 'OK'} : {status: 'Error', description: 'Firebase config not set up'}
             res.send(statusResult)
         } catch (err) {
             next(err)

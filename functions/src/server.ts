@@ -2,8 +2,7 @@ import createAppServer from './appServer.js'
 import createAdminServer from './adminServer.js'
 import createPreviewServer from './previewServer.js'
 import express from 'express'
-import {AllServerProperties} from './util'
-
+import {AllServerProperties} from './util.js'
 
 export function createServer({app: appProps, admin, preview}: AllServerProperties) {
     console.log('createServer')
@@ -17,5 +16,5 @@ export function createServer({app: appProps, admin, preview}: AllServerPropertie
 
 export function runServer(port: number, props: AllServerProperties) {
     const server = createServer(props)
-    server.listen(port)
+    return server.listen(port)
 }
