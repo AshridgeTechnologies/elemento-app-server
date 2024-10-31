@@ -11,12 +11,14 @@ export type AppServerProperties = {
     moduleCache: ModuleCache,
 }
 
-export type AdminServerProperties = AppServerProperties & {settingsStore: ModuleCache}
+export type AdminServerProperties = AppServerProperties & {settingsStore: ModuleCache, defaultFirebaseProject: string}
+export type InstallServerProperties = {}
 export type PreviewServerProperties = AppServerProperties & {settingsStore: ModuleCache}
 export type AllServerProperties = {
-    app: AppServerProperties,
-    admin: AdminServerProperties,
-    preview: PreviewServerProperties
+    app?: AppServerProperties,
+    admin?: AdminServerProperties,
+    preview?: PreviewServerProperties,
+    install?: InstallServerProperties
 }
 
 export const fileExists = (filePath: string): Promise<boolean> => fs.promises.access(filePath).then(() => true, () => false)

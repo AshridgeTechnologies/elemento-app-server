@@ -22,25 +22,18 @@ const validPreviewHeaders = {
 }
 
 test('preview Server', async (t) => {
-    let localFilePath: string, appServerLocalFilePath: string
-    let appModuleCache: ModuleCache & {modules: any}
-    let adminModuleCache: ModuleCache & {modules: any}
-    let previewModuleCache: ModuleCache & {modules: any}
-    let settingsStore: ModuleCache & {modules: any}
+    let localFilePath: string
+    let previewModuleCache: ModuleCache & { modules: any }
+    let settingsStore: ModuleCache & { modules: any }
     let server: Server | undefined, serverPort: number | undefined
     const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
 
     t.beforeEach(async () => {
         localFilePath = await newTestDir('previewServer');
-        appServerLocalFilePath = await newTestDir('appServer')
-        appModuleCache = createModuleCache()
-        adminModuleCache = createModuleCache()
         previewModuleCache = createModuleCache()
         settingsStore = createModuleCache();
         await settingsStore.store('.settings.json', bufferFromJson({previewPassword}));
         ({server, serverPort} = await makeServer({
-            app: {localFilePath: appServerLocalFilePath, moduleCache: appModuleCache},
-            admin: {localFilePath: appServerLocalFilePath, moduleCache: adminModuleCache, settingsStore },
             preview: {localFilePath, moduleCache: previewModuleCache, settingsStore }
         }))
     })

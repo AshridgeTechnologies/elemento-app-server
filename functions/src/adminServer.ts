@@ -1,30 +1,27 @@
 import express, {Request} from 'express'
 import path from 'path'
 import {deployToHosting, setupProject} from './adminUtil.js'
-import {AppServerProperties, checkData, clearCache, elementoHost} from './util.js'
+import {AdminServerProperties, checkData, clearCache, elementoHost} from './util.js'
 import cors from 'cors'
 import {errorHandler, logCall} from './expressUtils.js'
 import {ModuleCache} from './CloudStorageCache.js'
 
-const createDeployHandler = ({localFilePath, moduleCache}: AppServerProperties) =>
+const createDeployHandler = ({localFilePath, moduleCache, defaultFirebaseProject}: AdminServerProperties) =>
     async (req: Request, res: any, next: (err?: any) => void) => {
         console.log('deploy handler', req.url)
-        console.log(process.env)
         try {
-            const {gitRepoUrl} = req.body
+            const {gitRepoUrl, firebaseProject = defaultFirebaseProject} = req.body
             const firebaseAccessToken = req.get('x-firebase-access-token')
             const gitHubAccessToken = req.get('x-github-access-token')
 
             checkData(gitRepoUrl, 'Git URL', res)
             checkData(gitHubAccessToken, 'GitHub access token', res)
             checkData(firebaseAccessToken, 'Google access token', res)
-
-            const firebaseProject: string | undefined = process.env.GOOGLE_CLOUD_PROJECT
-            checkData(firebaseProject, 'Firebase Project in GOOGLE_CLOUD_PROJECT env variable', res)
+            checkData(firebaseProject, 'Firebase Project', res)
 
             const deployTag = new Date().toISOString().substring(0, 19)
             const checkoutPath = path.join(localFilePath, 'deploy', deployTag)
-            const releaseResult = await deployToHosting({gitRepoUrl, firebaseProject: firebaseProject!, checkoutPath,
+            const releaseResult = await deployToHosting({gitRepoUrl, firebaseProject, checkoutPath,
                 firebaseAccessToken: firebaseAccessToken!, gitHubAccessToken: gitHubAccessToken!, moduleCache})
             res.send(releaseResult)
         } catch (err) {
@@ -45,16 +42,15 @@ const createClearHandler = ({localFilePath, moduleCache}: { localFilePath: strin
         }
     }
 
-const createSetupHandler = ({settingsStore}: { settingsStore: ModuleCache }) =>
+const createSetupHandler = ({settingsStore, defaultFirebaseProject}: AdminServerProperties) =>
     async (req: any, res: any, next: (err?: any) => void) => {
         console.log('setup handler', req.url)
         try {
-            const settings = req.body
+            const {settings, firebaseProject = defaultFirebaseProject} = req.body
             const firebaseAccessToken: string = req.get('x-firebase-access-token')
             checkData(firebaseAccessToken, 'Google access token', res)
-            const firebaseProject: string | undefined = process.env.GOOGLE_CLOUD_PROJECT
-            checkData(firebaseProject, 'Firebase Project in GOOGLE_CLOUD_PROJECT env variable', res)
-            await setupProject({firebaseAccessToken, firebaseProject: firebaseProject!, settingsStore, settings})
+            checkData(firebaseProject, 'Firebase Project', res)
+            await setupProject({firebaseAccessToken, firebaseProject, settingsStore, settings})
             res.end()
         } catch (err) {
             next(err)
@@ -73,7 +69,7 @@ const createStatusHandler = ({settingsStore}: { settingsStore: ModuleCache }) =>
         }
     }
 
-export default function createAdminServer(props: {localFilePath: string, moduleCache: ModuleCache, settingsStore: ModuleCache}) {
+export default function createAdminServer(props: AdminServerProperties) {
     console.log('createAdminServer', )
     const deployHandler = createDeployHandler(props)
     const clearHandler = createClearHandler(props)

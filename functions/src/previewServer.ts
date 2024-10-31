@@ -5,10 +5,11 @@ import {
     clearCache,
     elementoHost,
     fileExists,
-    getFromCache, AllServerProperties,
+    getFromCache,
+    PreviewServerProperties,
     putIntoCacheAndFile,
     readFromCache,
-    runtimeImportPath, PreviewServerProperties
+    runtimeImportPath
 } from './util.js'
 import fs from 'fs'
 import axios from 'axios'

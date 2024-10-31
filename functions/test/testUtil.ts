@@ -3,7 +3,7 @@ import {Credentials} from 'google-auth-library'
 import * as os from 'os'
 import {ModuleCache} from '../src/CloudStorageCache'
 import {AllServerProperties} from '../src/util'
-import {createServer, runServer} from '../src/server'
+import {runServer} from '../src/server'
 import * as fs from 'fs'
 // @ts-ignore
 import admin from 'firebase-admin'

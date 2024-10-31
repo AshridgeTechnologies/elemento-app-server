@@ -14,30 +14,21 @@ const fetchJson = (url: string) => fetch(url, {headers: { Accept: 'application/j
 
 test('app Server', async (t) => {
 
-    let localFilePath: string, previewLocalFilePath: string
-    let appModuleCache: ModuleCache & {modules: any}
-    let adminModuleCache: ModuleCache & {modules: any}
-    let previewModuleCache: ModuleCache & {modules: any}
-    let settingsStore: ModuleCache & {modules: any}
+    let localFilePath: string
+    let appModuleCache: ModuleCache & { modules: any }
     let testVersion = 'abcd1234'
     let server: Server | undefined, serverPort: number | undefined
-    const serverRuntimeBuffer: Buffer = await axios.get(`${runtimeImportPath}/serverRuntime.cjs`, {responseType: 'arraybuffer'}).then( resp => resp.data )
+    const serverRuntimeBuffer: Buffer = await axios.get(`${runtimeImportPath}/serverRuntime.cjs`, {responseType: 'arraybuffer'}).then(resp => resp.data)
 
     const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
 
-    t.beforeEach( async () => {
+    t.beforeEach(async () => {
         localFilePath = await newTestDir('appServer')
-        previewLocalFilePath = await newTestDir('previewServer')
         appModuleCache = createModuleCache()
-        adminModuleCache = createModuleCache()
-        previewModuleCache = createModuleCache()
-        settingsStore = createModuleCache()
         await appModuleCache.store(`${testVersion}/server/ServerApp1.mjs`, Buffer.from(serverAppCode), 'abc123');
         await appModuleCache.store(`${testVersion}/server/serverRuntime.cjs`, serverRuntimeBuffer, 'abc123');
         ({server, serverPort} = await makeServer({
             app: {localFilePath, moduleCache: appModuleCache},
-            admin: {localFilePath, moduleCache: adminModuleCache, settingsStore },
-            preview: {localFilePath, moduleCache: previewModuleCache, settingsStore }
         }))
     })
 

@@ -1,16 +1,18 @@
 import createAppServer from './appServer.js'
 import createAdminServer from './adminServer.js'
 import createPreviewServer from './previewServer.js'
+import createInstallServer from './installServer.js'
 import express from 'express'
 import {AllServerProperties} from './util.js'
 
-export function createServer({app: appProps, admin, preview}: AllServerProperties) {
+export function createServer({app: appProps, admin, preview, install}: AllServerProperties) {
     console.log('createServer')
 
     const app = express()
-    app.use(['/app'], createAppServer(appProps))
-    app.use(['/admin'], createAdminServer(admin))
-    app.use(['/preview'], createPreviewServer(preview))
+    if (appProps) app.use(['/app'], createAppServer(appProps))
+    if (admin) app.use(['/admin'], createAdminServer(admin))
+    if (preview) app.use(['/preview'], createPreviewServer(preview))
+    if (install) app.use(['/install'], createInstallServer(install))
     return app
 }
 

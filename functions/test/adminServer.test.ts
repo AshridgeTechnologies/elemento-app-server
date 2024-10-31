@@ -5,7 +5,6 @@ import {googleApiRequest} from '../src/util'
 import {createModuleCache, getAccessToken, initializeApp, makeServer, newTestDir, wait} from './testUtil'
 import git from 'isomorphic-git'
 import * as fs from 'fs'
-import * as dotenv from 'dotenv'
 import {ModuleCache} from '../src/CloudStorageCache'
 
 const getLatestCommitId = async (dir: string) => {
@@ -34,14 +33,17 @@ async function clearWebApps(firebaseAccessToken: string) {
 
 test('admin Server', async (t) => {
 
-    let localFilePath: string, previewLocalFilePath: string
-    let appModuleCache: ModuleCache & {modules: any}
-    let adminModuleCache: ModuleCache & {modules: any}
-    let previewModuleCache: ModuleCache & {modules: any}
-    let settingsStore: ModuleCache & {modules: any}
+    let localFilePath: string
+    let adminModuleCache: ModuleCache & { modules: any }
+    let settingsStore: ModuleCache & { modules: any }
     let gitHubAccessToken: string, serviceAccountKey: string, firebaseAccessToken: string, headers: HeadersInit
 
     let server: Server | undefined, serverPort: number | undefined
+    const startServer = async (defaultFirebaseProject = firebaseProject) => {
+        ({server, serverPort} = await makeServer({
+            admin: {localFilePath, moduleCache: adminModuleCache, settingsStore, defaultFirebaseProject},
+        }))
+    }
     const stopServer = async () => server && await new Promise(resolve => server!.close(resolve as () => void))
 
     const requestData = {
@@ -49,8 +51,6 @@ test('admin Server', async (t) => {
     }
 
     t.beforeEach(async () => {
-        dotenv.populate(process.env, {GOOGLE_CLOUD_PROJECT: firebaseProject})
-        expect(process.env.GOOGLE_CLOUD_PROJECT).toBe(firebaseProject)
         gitHubAccessToken = await fs.promises.readFile('private/Elemento-Test-1-2RepoToken_finegrained.txt', 'utf8')
         serviceAccountKey = JSON.parse(fs.readFileSync(serviceAccountKeyPath, 'utf8'))
         firebaseAccessToken = await getAccessToken(serviceAccountKey);
@@ -61,22 +61,14 @@ test('admin Server', async (t) => {
         });
 
         localFilePath = await newTestDir('adminServer')
-        previewLocalFilePath = await newTestDir('previewServer')
-        appModuleCache = createModuleCache()
         adminModuleCache = createModuleCache()
-        previewModuleCache = createModuleCache()
         settingsStore = createModuleCache();
-
-        ({server, serverPort} = await makeServer({
-            app: {localFilePath, moduleCache: appModuleCache},
-            admin: {localFilePath, moduleCache: adminModuleCache, settingsStore },
-            preview: {localFilePath: previewLocalFilePath, moduleCache: previewModuleCache, settingsStore }
-        }))
     })
 
     t.afterEach(stopServer)
 
     await t.test('setup initialises firebase project', { skip: false }, async () => {
+        await startServer()
         await clearWebApps(firebaseAccessToken)
 
         const statusUrl = `http://localhost:${serverPort}/admin/status`
@@ -94,7 +86,7 @@ test('admin Server', async (t) => {
             const statusResult = await fetch(statusUrl).then( resp => resp.json() )
             expect(statusResult).toStrictEqual({status: 'Error', description: 'Firebase config not set up'})
 
-            const setupResult = await fetch(setupUrl, {method: 'POST', headers, body: JSON.stringify(settings)})
+            const setupResult = await fetch(setupUrl, {method: 'POST', headers, body: JSON.stringify({settings})})
             expect(setupResult.status).toBe(200)
             console.log('Settings updated')
 
@@ -116,6 +108,7 @@ test('admin Server', async (t) => {
 
     await t.test('deploys client-only project from GitHub', { skip: false }, async () => {
 
+        await startServer()
         await clearWebApps(firebaseAccessToken)
 
         const deployUrl = `http://localhost:${serverPort}/admin/deploy`
@@ -150,11 +143,13 @@ test('admin Server', async (t) => {
         }
     })
 
-    await t.test('deploys project with server app from GitHub', { skip: false }, async () => {
+    await t.test('deploys project with server app from GitHub using specified firebase project', { skip: false }, async () => {
 
+        await startServer('other-firebase-project')
         const deployUrl = `http://localhost:${serverPort}/admin/deploy`
         try {
-            const deployResult = await fetch(deployUrl, {method: 'POST', headers, body: JSON.stringify(requestData)}).then( resp => resp.json() )
+            const requestWithFirebaseProject = {...requestData, firebaseProject: firebaseProject}
+            const deployResult = await fetch(deployUrl, {method: 'POST', headers, body: JSON.stringify(requestWithFirebaseProject)}).then( resp => resp.json() )
             console.log('Deployed')
             const {releaseTime} = deployResult
             const releaseTimeMillis = new Date(releaseTime).getTime()

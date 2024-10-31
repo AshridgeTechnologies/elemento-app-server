@@ -8,7 +8,7 @@
     "integrationTest": "node tsx integration-tests/integration-test.spec.ts",
     "test": "(cd integration-tests && firebase emulators:exec 'npm run integrationTest' -P elemento-test)"
   },
-  "main": "lib/index.js",
+  "main": "lib/run.js",
   "type": "module",
   "dependencies": {
     "axios": "^1.4.0",
