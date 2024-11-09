@@ -1,7 +1,11 @@
 import {type NextFunction} from 'express'
 import {DecodedIdToken, getAuth} from 'firebase-admin/auth'
-import {isObject, mapValues} from 'radash'
+import {isObject, isString, mapValues} from 'radash'
 import {parseISO} from 'date-fns'
+
+/**
+ * NOTE: technical debt - this file is copied in the elemento-app-server project - changes must be synchronized
+ */
 
 export const isNumeric = (s: string) : boolean => s!== '' && s.match(/^\d*\.?\d*$/) !== null
 export const isBooleanString = (s: string) : boolean => s.match(/true|false/) !== null
@@ -22,15 +26,14 @@ const parseParam = (param: string) => {
     return param
 }
 
-/**
- * NOTE: technical debt - this file is copied in the elemento-app-server project - changes must be synchronized
- */
-
 const convertDataValues = (val: any): any => {
-    const date = parseISO(val)
-    if (!Number.isNaN(date.getTime())) {
-        return date
+    if (isString(val)) {
+        const date = parseISO(val)
+        if (!Number.isNaN(date.getTime())) {
+            return date
+        }
     }
+
     if (isObject(val)) {
         return mapValues(val, convertDataValues)
     }
@@ -47,8 +50,10 @@ export function parseQueryParams(req: {query: { [key: string]: string; }}): obje
     return mapValues(req.query as any, parseParam) as object
 }
 export function errorHandler (err: any, req: any, res: any, _next: any) {
-    const {status = 500, message} = err
-    console.error(err)
+    const isValidation = err.constructor.name === 'ValidationError'
+    const status = err.status ?? (isValidation ? 400 : 500)
+    const {message} = err
+    console.error(message, isValidation ? '' : err)
     res?.status(status)
     res?.send({error: {status, message}})
 }

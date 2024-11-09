@@ -12,6 +12,13 @@ const fetchJson = (url: string) => fetch(url, {headers: { Accept: 'application/j
     return resp.json()
 })
 
+const postJson = (url: string, data?: any) => {
+    return fetch(url, {headers: {Accept: 'application/json', 'Content-Type': 'application/json'}, body: JSON.stringify(data), method: 'POST'}).then(resp => {
+        expect(resp.headers.get('Content-Type')).toBe('application/json; charset=utf-8')
+        return resp.json()
+    })
+}
+
 test('app Server', async (t) => {
 
     let localFilePath: string
@@ -33,10 +40,19 @@ test('app Server', async (t) => {
     })
 
     await t.test('app server runs server app on given version from cached module', async () => {
-
         try {
             expect(await fetchJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1/Plus?a=37&b=5`)).toBe(42)
             expect(await fetchJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1/Plus?a=99&b=1`)).toBe(100)
+        } finally {
+            await stopServer()
+        }
+    })
+
+    await t.test('app server handles post requests', async () => {
+        const data = {name: 'Josh', age: 37, startDate: new Date('2023-02-03')}
+        const returnedData = {...data, startDate: new Date('2023-02-03').toISOString()}
+        try {
+            expect(await postJson(`http://localhost:${serverPort}/capi/${testVersion}/ServerApp1/EchoData`, data)).toStrictEqual(returnedData)
         } finally {
             await stopServer()
         }

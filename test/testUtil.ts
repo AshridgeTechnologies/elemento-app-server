@@ -83,11 +83,16 @@ async function HideMe(where) {
     return where + ' - there'
 }
 
+async function EchoData(name, age, startDate) {
+    return {name, age, startDate}
+}
+
 return {
     Plus: {func: Plus, update: false, argNames: ['a', 'b']},
     BlowUp: {func: BlowUp, update: false, argNames: ['c', 'd']},
     Total: {func: Total, update: false, argNames: ['x', 'y', 'z']},
-    Difference: {func: Difference, update: false, argNames: ['x', 'y']}
+    Difference: {func: Difference, update: false, argNames: ['x', 'y']},
+    EchoData: {func: EchoData, update: true, argNames: ['name', 'age', 'startDate']}
 }
 }
 
@@ -116,7 +121,7 @@ export const createModuleCache = (): ModuleCache & {modules:any} => ({
         this.modules = {}
         return Promise.resolve()
     },
-    etag(_: string) { return undefined },
+    etag(_: string) { return Promise.resolve(null) },
     store(path: string, contents: Buffer, _?: string) {
         this.modules[path] = contents
         return Promise.resolve()
